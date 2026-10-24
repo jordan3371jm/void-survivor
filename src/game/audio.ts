@@ -6,6 +6,10 @@ let musicNodes: any[] = [];
 let customAudioElement: HTMLAudioElement | null = null;
 let useCustomMusic = false;
 let musicMaster: GainNode | null = null;
+// Colonna sonora del gioco (public/audio/bgm.mp3): in streaming, parte all'inizio della partita
+let trackAudio: HTMLAudioElement | null = null;
+let trackFailed = false;
+const TRACK_URL = `${import.meta.env.BASE_URL || '/'}audio/bgm.mp3`;
 const lastSfxAt: Record<string, number> = {};
 
 function getAudioContext(): AudioContext {
@@ -19,6 +23,7 @@ export function setSfxVolume(volume: number) { sfxVolume = Math.max(0, Math.min(
 export function setMusicVolume(volume: number) {
   musicVolume = Math.max(0, Math.min(1, volume));
   if (customAudioElement) customAudioElement.volume = musicVolume;
+  if (trackAudio) trackAudio.volume = musicVolume;
   if (musicMaster) musicMaster.gain.value = musicVolume * 0.35;
 }
 
@@ -51,6 +56,21 @@ export function startBackgroundMusic() {
       isMusicPlaying = true;
       return;
     } catch (error) { console.error('Errore nella riproduzione della musica personalizzata:', error); }
+  }
+  if (!trackFailed) {
+    try {
+      if (!trackAudio) {
+        trackAudio = new Audio(TRACK_URL);
+        trackAudio.loop = true;
+        trackAudio.preload = 'auto';
+        // se il file non si carica si torna alla musica sintetizzata
+        trackAudio.addEventListener('error', () => { trackFailed = true; trackAudio = null; if (isMusicPlaying) { isMusicPlaying = false; startBackgroundMusic(); } });
+      }
+      trackAudio.volume = musicVolume;
+      trackAudio.play().catch(e => console.warn('[Audio] musica in attesa di un tocco:', e));
+      isMusicPlaying = true;
+      return;
+    } catch (error) { trackFailed = true; trackAudio = null; }
   }
   try {
     const ctx = getAudioContext();
@@ -300,6 +320,7 @@ export function stopBackgroundMusic() {
   if (isMusicPlaying) {
     try {
       if (useCustomMusic && customAudioElement) { customAudioElement.pause(); customAudioElement.currentTime = 0; }
+      if (trackAudio) trackAudio.pause();
       musicNodes.forEach(node => {
         if (node.stop) { try { node.stop(); } catch (e) {} }
         if (node.interval) clearInterval(node.interval);
@@ -398,9 +419,11 @@ export function setAudioPaused(paused: boolean) {
     if (paused) {
       if (audioCtx && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
       if (customAudioElement && !customAudioElement.paused) customAudioElement.pause();
+      if (trackAudio && !trackAudio.paused) trackAudio.pause();
     } else {
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       if (useCustomMusic && customAudioElement && isMusicPlaying && customAudioElement.paused) customAudioElement.play().catch(() => {});
+      else if (!useCustomMusic && trackAudio && isMusicPlaying && trackAudio.paused) trackAudio.play().catch(() => {});
     }
   } catch { /* audio non disponibile */ }
 }

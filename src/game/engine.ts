@@ -662,7 +662,8 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.gameMode !== 'boss_rush') {
     // Maledizione: piu' frequenza (spawnRate) e piu' quantita' (nemici per ogni spawn)
     const curseSpawn = 1 + Math.max(0, state.player.curseLevel) / 100;
-    const spawnRate = Math.min(1 + state.time / 20, 8) * curseSpawn;
+    // Durante un boss arrivano il 70% di nemici in meno: lo scontro col boss resta al centro della scena
+    const spawnRate = Math.min(1 + state.time / 20, 8) * curseSpawn * (state.bossActive ? 0.3 : 1);
     if (Math.random() < spawnRate * gameDt) {
       const wave1: EnemyType[] = ['asteroid_small', 'swarm', 'drone_sentinel', 'cosmic_leech', 'star_beetle'];
       const wave2: EnemyType[] = ['asteroid_small', 'asteroid_medium', 'drone_sentinel', 'star_raider', 'void_crawler', 'star_fish'];
