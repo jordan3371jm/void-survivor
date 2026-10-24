@@ -176,6 +176,8 @@ export interface NebulaPool {
   color: string;
   lifetime: number;
   maxLifetime: number;
+  source?: string; // abilita' che l'ha creata (per le statistiche dei danni)
+  hostile?: boolean; // creata da un boss: danneggia il giocatore, non i nemici
 }
 
 export interface StormHitbox {
@@ -291,7 +293,7 @@ export type ProjectileType =
   | 'kinetic_dart' | 'meteor_proj' | 'boomerang_proj' | 'plasma_ball'
   | 'nebula_pool' | 'quantum_proj' | 'quantum_bounce_proj' | 'lightning_bolt' | 'blackhole_wave'
   | 'probe_laser_red' | 'probe_laser_blue' | 'bullet'
-  | 'boss_laser_big' | 'boss_laser_small' | 'acid_blob' | 'tractor_beam';
+  | 'boss_laser_big' | 'boss_laser_small' | 'acid_blob' | 'tractor_beam' | 'boss_bolt';
 
 export interface LevelUpChoice {
   type: 'ability' | 'upgrade' | 'stat';
@@ -345,7 +347,10 @@ export interface GameState {
   gameMode: GameMode;
   bossRushIndex: number; // Indice del boss corrente in modalità Boss Rush
   bossesDefeated?: number; // boss sconfitti in questa partita
+  bossSpawnCount?: number; // boss gia' comparsi (modalita' normale/endless)
+  nextBossWave?: number; // ondata in cui arriva il prossimo boss
   victory?: boolean; // true se la partita e' finita con una vittoria
+  bossHazards?: unknown[]; // zone di pericolo degli attacchi dei boss (vedi bosses.ts)
   touchDir?: Vector2 | null; // direzione analogica da touch/joystick (lunghezza 0..1)
   
   // Statistiche per partita singola

@@ -13,18 +13,18 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <title>Void Survivors</title>
 
-    <!-- Font: collegamento anticipato, caricamento non bloccante -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- Font inclusi nel gioco (nessun servizio esterno): caricamento immediato -->
     <link rel="preconnect" href="https://bridge.playgama.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;800;900&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700;800&family=Orbitron:wght@600;800;900&display=swap" media="print" onload="this.media='all'" />
+    <link rel="preload" as="font" type="font/woff2" href="./fonts/orbitron-latin.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="./fonts/exo2-latin.woff2" crossorigin />
     <link rel="preload" as="image" href="./assets/bg_nebula.webp" type="image/webp" />
 
     <!-- Playgama Bridge: caricato in modo asincrono, il gioco lo attende da solo (playgame.ts) -->
     <script async src="https://bridge.playgama.com/v2/stable/playgama-bridge.js" onerror="window.__bridgeFailed = true"></script>
 
     <style>
+      @font-face { font-family: "Orbitron"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("./fonts/orbitron-latin.woff2") format("woff2"); }
+      @font-face { font-family: "Exo 2"; font-style: normal; font-weight: 100 900; font-display: swap; src: url("./fonts/exo2-latin.woff2") format("woff2"); }
       html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #05060f; color: #eef2ff; overflow: hidden; }
       #vs-splash {
         position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;

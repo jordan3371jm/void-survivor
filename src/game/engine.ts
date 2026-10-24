@@ -1,6 +1,7 @@
 import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, Ability, AbilityType, LevelUpChoice, Vector2, EnemyType, ShipType, DamageNumber, GameMode } from './types';
 import { playShoot, playPassiveSound } from './audio';
 import { getAbilityInfo } from './abilityInfo';
+import { updateBoss, updateBossHazards, clearBossHazards, drawBossHazards, drawBossAura } from './bosses';
 export { getAbilityInfo } from './abilityInfo';
 
 let idCounter = 0;
@@ -127,24 +128,19 @@ function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: Gam
   return true;
 }
 
-/** Sfondo nebulosa a tessere specchiate (nessuna cucitura) con parallasse lenta. */
+/** Sfondo nebulosa: immagine ripetibile senza cuciture, con parallasse lenta e velo scuro per far risaltare il gioco. */
 function drawNebulaBackground(ctx: CanvasRenderingContext2D, camera: { x: number; y: number }, width: number, height: number): void {
   const bg = loadImage('bg_nebula.webp');
   if (!bg) return;
-  const s = Math.max(1, height / bg.naturalHeight, width / bg.naturalWidth * 0.6);
+  const s = Math.max(0.75, Math.min(width, height) / 1100);
   const tw = bg.naturalWidth * s, th = bg.naturalHeight * s;
-  const offX = camera.x * 0.06, offY = camera.y * 0.06;
-  const i0 = Math.floor(offX / tw), j0 = Math.floor(offY / th);
-  for (let j = j0; j * th - offY < height; j++) {
-    for (let i = i0; i * tw - offX < width; i++) {
-      const fx = (i & 1) ? -1 : 1, fy = (j & 1) ? -1 : 1;
-      ctx.save();
-      ctx.translate(i * tw - offX + (fx < 0 ? tw : 0), j * th - offY + (fy < 0 ? th : 0));
-      ctx.scale(fx, fy);
-      ctx.drawImage(bg, 0, 0, tw + 1, th + 1);
-      ctx.restore();
-    }
+  const offX = ((camera.x * 0.08) % tw + tw) % tw, offY = ((camera.y * 0.08) % th + th) % th;
+  for (let y = -offY; y < height; y += th) {
+    for (let x = -offX; x < width; x += tw) ctx.drawImage(bg, x, y, tw + 1, th + 1);
   }
+  // velo scuro: lo sfondo resta bello ma non compete con nemici e proiettili
+  ctx.fillStyle = 'rgba(4, 5, 14, 0.28)';
+  ctx.fillRect(0, 0, width, height);
 }
 
 preloadSprites();
@@ -243,7 +239,7 @@ export function applyPassiveAbilities(player: Player): void {
     const level = ability.level;
     switch (ability.type) {
       case 'passive_fusion_core': player.weaponPower += 0.10 * level; break;
-      case 'passive_plating': passiveArmor += 10 * level; break;
+      case 'passive_plating': passiveArmor += 3 * level; break;
       case 'passive_neutronium_heart': player.maxHealthBonus += 0.20 * level; break;
       case 'passive_regen_core': player.regenPerSecond += 1 * level; break;
       case 'passive_void_tome': player.cooldownReduction += 0.10 * level; break;
@@ -312,7 +308,10 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   const pos = { x: state.player.pos.x + Math.cos(spawnAngle) * spawnDist, y: state.player.pos.y + Math.sin(spawnAngle) * spawnDist };
   
   // Calcola il moltiplicatore di difficoltà
-  let timeMultiplier = 1 + state.time / 120;
+  // Forza dei nemici legata all'ONDATA: all'inizio sono deboli, poi ogni ondata hanno piu' vita
+  // (crescita che accelera nelle ondate avanzate: per questo servono i potenziamenti del negozio)
+  const waveIdx = Math.max(0, state.wave - 1);
+  let timeMultiplier = 1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004;
   
   // Modalità Endless: dopo l'onda 40, aumenta la difficoltà del 10% per ogni ondata
   if (state.gameMode === 'endless' && state.wave > 40) {
@@ -353,10 +352,15 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     boss_void_emperor: { radius: 88, hp: 2600 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
     boss_cosmic_horror: { radius: 92, hp: 2800 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
   };
-  const base = baseEnemies[type] || baseEnemies['asteroid_small'];
+  const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
+  // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
+  if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Maledizione: nemici normali con piu' salute e velocita' (i boss non vengono modificati)
   const curseMul = type.startsWith('boss_') ? 1 : 1 + Math.max(0, state.player.curseLevel) / 100;
-  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: type.startsWith('boss_') ? 30 : type.includes('asteroid') ? 15 : 10, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
+  // I danni dei nemici crescono col tempo (prima restavano 10 per tutta la partita: con un po' di armatura si era invincibili)
+  // Danni: bassi all'inizio (meta' di prima), +12% per ogni ondata
+  const dmgMul = 0.5 * (1 + waveIdx * 0.12) * (state.gameMode === 'endless' && state.wave > 40 ? 1 + (state.wave - 40) * 0.05 : 1);
+  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 30 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
 }
 
 function spawnParticles(state: GameState, pos: Vector2, color: string, count: number) {
@@ -366,16 +370,23 @@ function spawnParticles(state: GameState, pos: Vector2, color: string, count: nu
   }
 }
 
+// Danni continui (spade, satelliti, nebulose, campi...): arrivano a piccole frazioni ogni frame.
+// Si sommano per nemico e si mostrano ogni 0,3 s, invece di una pioggia di "0".
+const continuousDamage = new WeakMap<Vector2, { value: number; shownAt: number }>();
+
 function spawnDamageNumber(state: GameState, pos: Vector2, damage: number, color: string, isCrit: boolean = false, abilityType?: string) {
-  state.damageNumbers.push({ id: genId(), pos: { x: pos.x + (Math.random() - 0.5) * 20, y: pos.y - 10 }, value: Math.floor(damage), lifetime: 1.0, maxLifetime: 1.0, color: isCrit ? '#ffff00' : color, isCrit });
-  
-  // Traccia i danni per abilità
+  // Traccia i danni per abilità (senza arrotondare: i danni per frame valevano sempre 0)
   if (abilityType && damage > 0) {
-    if (!state.abilityDamageStats[abilityType]) {
-      state.abilityDamageStats[abilityType] = 0;
-    }
-    state.abilityDamageStats[abilityType] += Math.floor(damage);
+    state.abilityDamageStats[abilityType] = (state.abilityDamageStats[abilityType] || 0) + damage;
   }
+  if (damage < 2 && !isCrit) {
+    const acc = continuousDamage.get(pos) || { value: 0, shownAt: -1 };
+    acc.value += damage;
+    continuousDamage.set(pos, acc);
+    if (state.time - acc.shownAt < 0.3 || acc.value < 1) return;
+    damage = acc.value; acc.value = 0; acc.shownAt = state.time;
+  }
+  state.damageNumbers.push({ id: genId(), pos: { x: pos.x + (Math.random() - 0.5) * 20, y: pos.y - 10 }, value: Math.floor(damage), lifetime: 1.0, maxLifetime: 1.0, color: isCrit ? '#ffff00' : color, isCrit });
 }
 
 function spawnExpOrb(state: GameState, pos: Vector2, value: number) {
@@ -403,503 +414,16 @@ function getAbilityTypeFromProjectile(projType: string): string | undefined {
 }
 
 // Boss Attack System
-function initBossAttack(enemy: Enemy) {
-  enemy.attackState = 'idle';
-  enemy.attackTimer = 3 + Math.random() * 2;
-  enemy.currentAttack = '';
-  enemy.attackData = null;
-}
-
-function updateBossAttack(state: GameState, enemy: Enemy, dt: number) {
-  if (!enemy.isBoss) return;
-  
-  enemy.attackTimer = (enemy.attackTimer || 0) - dt;
-  
-  switch (enemy.attackState) {
-    case 'idle':
-      if (enemy.attackTimer <= 0) {
-        const attacks = getBossAttacks(enemy.type);
-        enemy.currentAttack = attacks[Math.floor(Math.random() * attacks.length)];
-        enemy.attackState = 'charging';
-        enemy.attackTimer = 0.3;
-        enemy.attackData = prepareBossAttack(state, enemy, enemy.currentAttack);
-      }
-      break;
-      
-    case 'charging':
-      if (enemy.attackTimer <= 0) {
-        enemy.attackState = 'firing';
-        enemy.attackTimer = 0.3;
-        executeBossAttack(state, enemy);
-      }
-      break;
-      
-    case 'firing':
-      if (enemy.attackTimer <= 0) {
-        enemy.attackState = 'idle';
-        enemy.attackTimer = 0.5 + Math.random() * 0.5;
-      }
-      break;
-  }
-}
-
-function getBossAttacks(bossType: EnemyType): string[] {
-  switch (bossType) {
-    case 'boss_death_star': return ['superlaser_big', 'superlaser_small', 'turbolaser_burst'];
-    case 'boss_xenomorph': return ['acid_spit', 'tail_spin', 'screech_wave'];
-    case 'boss_cthulhu': return ['tentacle_slam', 'mind_blast', 'eldritch_wave'];
-    case 'boss_borg_cube': return ['tractor_beam', 'cube_drone_swarm', 'adaptation_pulse'];
-    case 'boss_space_kraken': return ['tentacle_rain', 'ink_cloud', 'beak_strike'];
-    case 'boss_galaxy_devourer': return ['black_hole', 'cosmic_ray', 'galaxy_swirl'];
-    case 'boss_void_emperor': return ['void_lance', 'dark_nova', 'emperor_judgment'];
-    case 'boss_cosmic_horror': return ['reality_tear', 'madness_gaze', 'cosmic_spawn'];
-    default: return ['basic_shot'];
-  }
-}
-
-function prepareBossAttack(state: GameState, enemy: Enemy, attackType: string): any {
-  const playerAngle = angle(enemy.pos, state.player.pos);
-  
-  switch (attackType) {
-    case 'superlaser_big': {
-      const directions: number[] = [];
-      directions.push(playerAngle);
-      for (let i = 0; i < 7; i++) {
-        let newAngle: number;
-        let attempts = 0;
-        do {
-          newAngle = Math.random() * Math.PI * 2;
-          attempts++;
-        } while (directions.some(d => Math.abs(d - newAngle) < 0.3) && attempts < 10);
-        directions.push(newAngle);
-      }
-      return { directions, laserSize: 'big' };
-    }
-    
-    case 'superlaser_small': {
-      const directions: number[] = [];
-      directions.push(playerAngle);
-      for (let i = 0; i < 15; i++) {
-        let newAngle: number;
-        let attempts = 0;
-        do {
-          newAngle = Math.random() * Math.PI * 2;
-          attempts++;
-        } while (directions.some(d => Math.abs(d - newAngle) < 0.2) && attempts < 10);
-        directions.push(newAngle);
-      }
-      return { directions, laserSize: 'small' };
-    }
-    
-    case 'tentacle_slam': {
-      const tentacleCount = 6;
-      const tentacles: { x: number; y: number; radius: number }[] = [];
-      for (let i = 0; i < tentacleCount; i++) {
-        const offsetAngle = playerAngle + (Math.random() - 0.5) * 1.5;
-        const distance = 100 + Math.random() * 200;
-        tentacles.push({
-          x: enemy.pos.x + Math.cos(offsetAngle) * distance,
-          y: enemy.pos.y + Math.sin(offsetAngle) * distance,
-          radius: 40 + Math.random() * 30
-        });
-      }
-      return { tentacles };
-    }
-    
-    case 'acid_spit': {
-      const spreadAngles: number[] = [];
-      for (let i = -4; i <= 4; i++) {
-        spreadAngles.push(playerAngle + i * 0.15);
-      }
-      return { angles: spreadAngles };
-    }
-    
-    case 'tail_spin': {
-      return { spinDirection: Math.random() > 0.5 ? 1 : -1 };
-    }
-    
-    case 'screech_wave': {
-      return { waveRadius: 200 };
-    }
-    
-    case 'mind_blast': {
-      return { waveRadius: 300 };
-    }
-    
-    case 'eldritch_wave': {
-      const waves: { radius: number; delay: number }[] = [];
-      for (let i = 0; i < 3; i++) {
-        waves.push({ radius: 150 + i * 50, delay: i * 0.3 });
-      }
-      return { waves };
-    }
-    
-    case 'tractor_beam': {
-      return { angle: playerAngle };
-    }
-    
-    case 'cube_drone_swarm': {
-      const droneCount = 8;
-      const drones: { angle: number; speed: number }[] = [];
-      for (let i = 0; i < droneCount; i++) {
-        const droneAngle = playerAngle + (Math.random() - 0.5) * 1.0;
-        drones.push({ angle: droneAngle, speed: 200 + Math.random() * 100 });
-      }
-      return { drones };
-    }
-    
-    case 'adaptation_pulse': {
-      return { pulseRadius: 250 };
-    }
-    
-    case 'tentacle_rain': {
-      const tentacles: { x: number; y: number; radius: number }[] = [];
-      for (let i = 0; i < 8; i++) {
-        const offsetAngle = playerAngle + (Math.random() - 0.5) * 2.0;
-        const distance = 50 + Math.random() * 250;
-        tentacles.push({
-          x: enemy.pos.x + Math.cos(offsetAngle) * distance,
-          y: enemy.pos.y + Math.sin(offsetAngle) * distance,
-          radius: 30 + Math.random() * 25
-        });
-      }
-      return { tentacles };
-    }
-    
-    case 'ink_cloud': {
-      return { cloudRadius: 180 };
-    }
-    
-    case 'beak_strike': {
-      return { angle: playerAngle };
-    }
-    
-    case 'black_hole': {
-      return { holeRadius: 150 };
-    }
-    
-    case 'cosmic_ray': {
-      const rayCount = 6;
-      const rays: number[] = [];
-      rays.push(playerAngle);
-      for (let i = 0; i < rayCount - 1; i++) {
-        rays.push(Math.random() * Math.PI * 2);
-      }
-      return { rays };
-    }
-    
-    case 'galaxy_swirl': {
-      return { swirlRadius: 250 };
-    }
-    
-    case 'void_lance': {
-      return { angle: playerAngle };
-    }
-    
-    case 'dark_nova': {
-      return { novaRadius: 300 };
-    }
-    
-    case 'emperor_judgment': {
-      const strikeCount = 5;
-      const strikes: { x: number; y: number; radius: number }[] = [];
-      for (let i = 0; i < strikeCount; i++) {
-        const offsetAngle = playerAngle + (Math.random() - 0.5) * 1.5;
-        const distance = 80 + Math.random() * 180;
-        strikes.push({
-          x: enemy.pos.x + Math.cos(offsetAngle) * distance,
-          y: enemy.pos.y + Math.sin(offsetAngle) * distance,
-          radius: 35 + Math.random() * 25
-        });
-      }
-      return { strikes };
-    }
-    
-    case 'reality_tear': {
-      return { tearRadius: 200 };
-    }
-    
-    case 'madness_gaze': {
-      return { angle: playerAngle };
-    }
-    
-    case 'cosmic_spawn': {
-      const spawnCount = 4;
-      const spawns: { x: number; y: number; radius: number }[] = [];
-      for (let i = 0; i < spawnCount; i++) {
-        const spawnAngle = (i / spawnCount) * Math.PI * 2;
-        const distance = 120 + Math.random() * 80;
-        spawns.push({
-          x: enemy.pos.x + Math.cos(spawnAngle) * distance,
-          y: enemy.pos.y + Math.sin(spawnAngle) * distance,
-          radius: 40
-        });
-      }
-      return { spawns };
-    }
-    
-    default:
-      return { angle: playerAngle };
-  }
-}
-
-function executeBossAttack(state: GameState, enemy: Enemy) {
-  if (!enemy.attackData) return;
-  
-  const playerAngle = angle(enemy.pos, state.player.pos);
-  
-  switch (enemy.currentAttack) {
-    case 'superlaser_big': {
-      for (const dir of enemy.attackData.directions) {
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(dir) * 400, y: Math.sin(dir) * 400 },
-          radius: 15, hp: 1, maxHp: 1, damage: 25, fromPlayer: false,
-          lifetime: 3, maxLifetime: 3, type: 'boss_laser_big', color: '#ff0000', trail: []
-        });
-      }
-      state.screenShake = 0.5;
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'superlaser_small': {
-      for (const dir of enemy.attackData.directions) {
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(dir) * 500, y: Math.sin(dir) * 500 },
-          radius: 8, hp: 1, maxHp: 1, damage: 15, fromPlayer: false,
-          lifetime: 2.5, maxLifetime: 2.5, type: 'boss_laser_small', color: '#ff4444', trail: []
-        });
-      }
-      playShoot('laser');
-      break;
-    }
-    
-    case 'turbolaser_burst': {
-      for (let i = 0; i < 20; i++) {
-        const angle = (i / 20) * Math.PI * 2;
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(angle) * 300, y: Math.sin(angle) * 300 },
-          radius: 6, hp: 1, maxHp: 1, damage: 12, fromPlayer: false,
-          lifetime: 2, maxLifetime: 2, type: 'enemy_bullet', color: '#ff6600', trail: []
-        });
-      }
-      playShoot('laser');
-      break;
-    }
-    
-    case 'tentacle_slam': {
-      for (const tentacle of enemy.attackData.tentacles) {
-        state.stormHitboxes.push({
-          id: genId(), pos: { x: tentacle.x, y: tentacle.y },
-          radius: tentacle.radius, damage: 20, color: '#00ff88',
-          lifetime: 0, maxLifetime: 1.5, shape: 'circle', rotation: 0
-        });
-        spawnParticles(state, { x: tentacle.x, y: tentacle.y }, '#00ff88', 6);
-      }
-      state.screenShake = 0.4;
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'acid_spit': {
-      for (const angle of enemy.attackData.angles) {
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(angle) * 350, y: Math.sin(angle) * 350 },
-          radius: 10, hp: 1, maxHp: 1, damage: 18, fromPlayer: false,
-          lifetime: 2, maxLifetime: 2, type: 'acid_blob', color: '#88ff00', trail: []
-        });
-      }
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'tail_spin': {
-      const spinDir = enemy.attackData.spinDirection;
-      for (let i = 0; i < 16; i++) {
-        const angle = (i / 16) * Math.PI * 2 * spinDir;
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(angle) * 280, y: Math.sin(angle) * 280 },
-          radius: 7, hp: 1, maxHp: 1, damage: 14, fromPlayer: false,
-          lifetime: 2, maxLifetime: 2, type: 'enemy_bullet', color: '#444444', trail: []
-        });
-      }
-      playShoot('laser');
-      break;
-    }
-    
-    case 'screech_wave':
-    case 'mind_blast':
-    case 'adaptation_pulse':
-    case 'dark_nova':
-    case 'reality_tear': {
-      const waveRadius = enemy.attackData.waveRadius || enemy.attackData.pulseRadius || enemy.attackData.novaRadius || enemy.attackData.tearRadius || 250;
-      state.gravityWaves.push({
-        id: genId(), pos: { ...enemy.pos },
-        radius: 0, maxRadius: waveRadius, damage: 15,
-        color: enemy.color, lifetime: 0, maxLifetime: 2,
-        expansionSpeed: 200, damagedEnemies: new Set()
-      });
-      state.screenShake = 0.3;
-      playShoot('gravity_waves');
-      break;
-    }
-    
-    case 'eldritch_wave': {
-      for (const wave of enemy.attackData.waves) {
-        setTimeout(() => {
-          state.gravityWaves.push({
-            id: genId(), pos: { ...enemy.pos },
-            radius: 0, maxRadius: wave.radius, damage: 12,
-            color: '#aa00ff', lifetime: 0, maxLifetime: 2,
-            expansionSpeed: 180, damagedEnemies: new Set()
-          });
-        }, wave.delay * 1000);
-      }
-      playShoot('gravity_waves');
-      break;
-    }
-    
-    case 'tractor_beam': {
-      state.projectiles.push({
-        id: genId(), pos: { ...enemy.pos },
-        vel: { x: Math.cos(playerAngle) * 200, y: Math.sin(playerAngle) * 200 },
-        radius: 20, hp: 1, maxHp: 1, damage: 10, fromPlayer: false,
-        lifetime: 3, maxLifetime: 3, type: 'tractor_beam', color: '#00ff00', trail: []
-      });
-      playShoot('laser');
-      break;
-    }
-    
-    case 'cube_drone_swarm': {
-      for (const drone of enemy.attackData.drones) {
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(drone.angle) * drone.speed, y: Math.sin(drone.angle) * drone.speed },
-          radius: 8, hp: 1, maxHp: 1, damage: 12, fromPlayer: false,
-          lifetime: 3, maxLifetime: 3, type: 'enemy_bullet', color: '#00ff00', trail: []
-        });
-      }
-      playShoot('laser');
-      break;
-    }
-    
-    case 'tentacle_rain':
-    case 'emperor_judgment': {
-      const targets = enemy.attackData.tentacles || enemy.attackData.strikes;
-      for (const target of targets) {
-        state.stormHitboxes.push({
-          id: genId(), pos: { x: target.x, y: target.y },
-          radius: target.radius, damage: 18, color: enemy.color,
-          lifetime: 0, maxLifetime: 1.5, shape: 'circle', rotation: 0
-        });
-        spawnParticles(state, { x: target.x, y: target.y }, enemy.color, 5);
-      }
-      state.screenShake = 0.4;
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'ink_cloud': {
-      const cloudRadius = enemy.attackData.cloudRadius || 180;
-      state.nebulaPools.push({
-        id: genId(), pos: { ...enemy.pos },
-        radius: cloudRadius, damage: 8, color: '#222222',
-        lifetime: 0, maxLifetime: 4
-      });
-      break;
-    }
-    
-    case 'beak_strike':
-    case 'void_lance':
-    case 'madness_gaze': {
-      const attackAngle = enemy.attackData.angle || playerAngle;
-      state.projectiles.push({
-        id: genId(), pos: { ...enemy.pos },
-        vel: { x: Math.cos(attackAngle) * 450, y: Math.sin(attackAngle) * 450 },
-        radius: 12, hp: 1, maxHp: 1, damage: 22, fromPlayer: false,
-        lifetime: 2.5, maxLifetime: 2.5, type: 'enemy_bullet', color: enemy.color, trail: []
-      });
-      playShoot('laser');
-      break;
-    }
-    
-    case 'black_hole': {
-      const holeRadius = enemy.attackData.holeRadius || 150;
-      state.gravityWaves.push({
-        id: genId(), pos: { ...enemy.pos },
-        radius: 0, maxRadius: holeRadius, damage: 20,
-        color: '#000000', lifetime: 0, maxLifetime: 3,
-        expansionSpeed: 100, damagedEnemies: new Set()
-      });
-      state.screenShake = 0.5;
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'cosmic_ray': {
-      for (const rayAngle of enemy.attackData.rays) {
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(rayAngle) * 500, y: Math.sin(rayAngle) * 500 },
-          radius: 10, hp: 1, maxHp: 1, damage: 18, fromPlayer: false,
-          lifetime: 2.5, maxLifetime: 2.5, type: 'enemy_bullet', color: '#ff00ff', trail: []
-        });
-      }
-      playShoot('laser');
-      break;
-    }
-    
-    case 'galaxy_swirl': {
-      const swirlRadius = enemy.attackData.swirlRadius || 250;
-      for (let i = 0; i < 16; i++) {
-        const angle = (i / 16) * Math.PI * 2;
-        state.projectiles.push({
-          id: genId(), pos: { ...enemy.pos },
-          vel: { x: Math.cos(angle) * 200, y: Math.sin(angle) * 200 },
-          radius: 8, hp: 1, maxHp: 1, damage: 14, fromPlayer: false,
-          lifetime: 3, maxLifetime: 3, type: 'enemy_bullet', color: '#8844ff', trail: []
-        });
-      }
-      state.screenShake = 0.3;
-      playShoot('explosion');
-      break;
-    }
-    
-    case 'cosmic_spawn': {
-      for (const spawn of enemy.attackData.spawns) {
-        state.stormHitboxes.push({
-          id: genId(), pos: { x: spawn.x, y: spawn.y },
-          radius: spawn.radius, damage: 16, color: '#ffff00',
-          lifetime: 0, maxLifetime: 2, shape: 'star', rotation: 0
-        });
-        spawnParticles(state, { x: spawn.x, y: spawn.y }, '#ffff00', 4);
-      }
-      playShoot('explosion');
-      break;
-    }
-    default: {
-      state.projectiles.push({
-        id: genId(), pos: { ...enemy.pos },
-        vel: { x: Math.cos(playerAngle) * 250, y: Math.sin(playerAngle) * 250 },
-        radius: 6, hp: 1, maxHp: 1, damage: 15, fromPlayer: false,
-        lifetime: 3, maxLifetime: 3, type: 'enemy_bullet', color: enemy.color, trail: []
-      });
-    }
-  }
-}
-
 function processAbilities(state: GameState, dt: number): void {
   const { player } = state;
   for (let i = state.drones.length - 1; i >= 0; i--) {
     const drone = state.drones[i]; drone.lifetime -= dt;
     if (drone.lifetime <= 0) { state.drones.splice(i, 1); continue; }
-    drone.angle += (Math.random() - 0.5) * 2 * dt;
-    drone.vel.x = Math.cos(drone.angle) * 100; drone.vel.y = Math.sin(drone.angle) * 100;
+    // i droni inseguono il nemico piu' vicino (prima vagavano a caso e colpivano raramente)
+    const droneTarget = getNearestEnemy(state, drone.pos, 350);
+    if (droneTarget) { const want = angle(drone.pos, droneTarget.pos); const diff = Math.atan2(Math.sin(want - drone.angle), Math.cos(want - drone.angle)); drone.angle += diff * Math.min(1, 6 * dt); }
+    else drone.angle += (Math.random() - 0.5) * 2 * dt;
+    drone.vel.x = Math.cos(drone.angle) * 170; drone.vel.y = Math.sin(drone.angle) * 170;
     drone.pos.x += drone.vel.x * dt; drone.pos.y += drone.vel.y * dt;
     for (const enemy of state.enemies) { if (dist(drone.pos, enemy.pos) < drone.radius + enemy.radius) { enemy.hp -= drone.damage * dt; spawnDamageNumber(state, enemy.pos, drone.damage * dt, drone.color, false, 'drone_swarm'); spawnParticles(state, enemy.pos, drone.color, 1); } }
   }
@@ -911,7 +435,16 @@ function processAbilities(state: GameState, dt: number): void {
   }
   for (let i = state.nebulaPools.length - 1; i >= 0; i--) {
     const nebula = state.nebulaPools[i]; nebula.lifetime += dt;
-    for (const enemy of state.enemies) { const d = dist(nebula.pos, enemy.pos); if (d < nebula.radius + enemy.radius) { enemy.hp -= nebula.damage * dt; spawnDamageNumber(state, enemy.pos, nebula.damage * dt, nebula.color, false, 'corrosive_nebula'); spawnParticles(state, enemy.pos, nebula.color, 1); } }
+    // Nube d'inchiostro del Kraken: prima danneggiava i nemici (e il boss stesso) invece del giocatore
+    if (nebula.hostile) {
+      if (player.invincibleTimer <= 0 && dist(nebula.pos, player.pos) < nebula.radius + player.radius) {
+        player.hp -= Math.max(0, nebula.damage - player.armor * 0.1) * dt;
+        if (player.hp <= 0 && player.hasRevive) { player.hp = player.maxHp * 0.5; player.hasRevive = false; player.dustReviveUsed = true; player.invincibleTimer = 2; }
+      }
+      if (nebula.lifetime >= nebula.maxLifetime) state.nebulaPools.splice(i, 1);
+      continue;
+    }
+    for (const enemy of state.enemies) { const d = dist(nebula.pos, enemy.pos); if (d < nebula.radius + enemy.radius) { enemy.hp -= nebula.damage * dt; spawnDamageNumber(state, enemy.pos, nebula.damage * dt, nebula.color, false, nebula.source || 'corrosive_nebula'); spawnParticles(state, enemy.pos, nebula.color, 1); } }
     if (nebula.lifetime >= nebula.maxLifetime) state.nebulaPools.splice(i, 1);
   }
   for (let i = state.stormHitboxes.length - 1; i >= 0; i--) {
@@ -1013,7 +546,7 @@ function processAbilities(state: GameState, dt: number): void {
         }
         player.shootFlash = 1; playShoot('homing_laser'); break;
       }
-      case 'drone_swarm': { const count = Math.min(lvl + 1, 5); for (let i = 0; i < count; i++) { const ang = (i / count) * Math.PI * 2; state.drones.push({ id: genId(), pos: { x: player.pos.x + Math.cos(ang) * 30, y: player.pos.y + Math.sin(ang) * 30 }, vel: { x: 0, y: 0 }, radius: 8, damage: dmg, lifetime: 5 * (1 + player.durationBonus), maxLifetime: 5 * (1 + player.durationBonus), color: ability.color, angle: Math.random() * Math.PI * 2 }); } playShoot('drone_swarm'); break; }
+      case 'drone_swarm': { const count = Math.min(lvl + 1, 5); for (let i = 0; i < count; i++) { const ang = (i / count) * Math.PI * 2; state.drones.push({ id: genId(), pos: { x: player.pos.x + Math.cos(ang) * 30, y: player.pos.y + Math.sin(ang) * 30 }, vel: { x: 0, y: 0 }, radius: 8, damage: dmg * 0.45, lifetime: 5 * (1 + player.durationBonus), maxLifetime: 5 * (1 + player.durationBonus), color: ability.color, angle: Math.random() * Math.PI * 2 }); } playShoot('drone_swarm'); break; }
       case 'gravity_waves': { const maxRadius = (150 + lvl * 30) * (1 + player.areaBonus); const expansionSpeed = 200 + lvl * 20; state.gravityWaves.push({ id: genId(), pos: { ...player.pos }, radius: 0, maxRadius, damage: dmg, color: ability.color, lifetime: 0, maxLifetime: maxRadius / expansionSpeed, expansionSpeed, damagedEnemies: new Set() }); playShoot('gravity_waves'); break; }
       case 'cryo_lance': { 
         const beamCount = 12;
@@ -1028,7 +561,7 @@ function processAbilities(state: GameState, dt: number): void {
       }
       case 'energy_shield': { player.shieldHits = lvl; playShoot('energy_shield'); break; }
       case 'laser_swords': { const swordCount = Math.min(lvl, 5); while (state.laserSwords.length > swordCount) state.laserSwords.pop(); while (state.laserSwords.length < swordCount) state.laserSwords.push({ id: genId(), angle: 0, distance: 60, length: 30, damage: dmg, color: ability.color }); const swordBase = state.laserSwords.length > 0 ? state.laserSwords[0].angle : 0; for (let i = 0; i < state.laserSwords.length; i++) { state.laserSwords[i].angle = swordBase + (i / swordCount) * Math.PI * 2; state.laserSwords[i].damage = dmg; state.laserSwords[i].length = (30 + lvl * 5) * (1 + player.areaBonus); } playShoot('laser_swords'); break; }
-      case 'plasma_flamethrower': { const randomAngle = Math.random() * Math.PI * 2; state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(randomAngle) * 350, y: Math.sin(randomAngle) * 350 }, radius: 12, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 2, maxLifetime: 2, type: 'plasma_ball', piercing: 3 + lvl, color: ability.color, trail: [] }); player.shootFlash = 1; playShoot('plasma_flamethrower'); break; }
+      case 'plasma_flamethrower': { const baseAngle = nearest ? angle(player.pos, nearest.pos) : Math.random() * Math.PI * 2; const flames = lvl >= 3 ? 2 : 1; for (let fi = 0; fi < flames; fi++) { const randomAngle = baseAngle + (Math.random() - 0.5) * 0.7; state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(randomAngle) * 350, y: Math.sin(randomAngle) * 350 }, radius: 12, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 2, maxLifetime: 2, type: 'plasma_ball', piercing: 3 + lvl, color: ability.color, trail: [] }); } player.shootFlash = 1; playShoot('plasma_flamethrower'); break; }
       case 'gravity_field': { const fieldRadius = (150 + lvl * 20) * (1 + player.areaBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); for (const enemy of state.enemies) { const d = dist(player.pos, enemy.pos); if (d < fieldRadius) { const damage = dmg * 0.5; enemy.hp -= damage; spawnDamageNumber(state, enemy.pos, damage, ability.color, false, 'gravity_field'); if (!(enemy.freezeTimer && enemy.freezeTimer > 0)) { if (!(enemy.slowTimer && enemy.slowTimer > 0)) enemy.baseSpeed = enemy.speed; enemy.slowTimer = Math.max(0.05, ability.cooldown * cdMul) + 0.3; enemy.speed = (enemy.baseSpeed || enemy.speed) * 0.7; } const pullDir = normalize({ x: player.pos.x - enemy.pos.x, y: player.pos.y - enemy.pos.y }); enemy.vel.x += pullDir.x * 20; enemy.vel.y += pullDir.y * 20; spawnParticles(state, enemy.pos, ability.color, 1); } } playShoot('gravity_field'); break; }
       case 'corrosive_nebula': { 
         const poolCount = Math.min(lvl, 3); 
@@ -1058,7 +591,7 @@ function processAbilities(state: GameState, dt: number): void {
         if (!strongestEnemy) break;
         const bombRadius = (150 + lvl * 25) * (1 + player.areaBonus);
         const bombDuration = 5 * (1 + player.durationBonus);
-        state.nebulaPools.push({ id: genId(), pos: { x: strongestEnemy.pos.x, y: strongestEnemy.pos.y }, radius: bombRadius, damage: dmg * 0.4, color: ability.color, lifetime: 0, maxLifetime: bombDuration });
+        state.nebulaPools.push({ id: genId(), pos: { x: strongestEnemy.pos.x, y: strongestEnemy.pos.y }, radius: bombRadius, damage: dmg * 0.4, color: ability.color, lifetime: 0, maxLifetime: bombDuration, source: 'antimatter_bomb' });
         spawnParticles(state, strongestEnemy.pos, ability.color, 8);
         playShoot('antimatter_bomb'); break;
       }
@@ -1084,7 +617,6 @@ export function updateGame(state: GameState, dt: number): void {
   state.currentWave = state.wave;
   state.currentScore = state.score;
   if (state.bossNameTimer > 0) state.bossNameTimer -= gameDt;
-  const prevWave = state.wave;
   // Calcola la durata dell'ondata in base al speed multiplier
   state.wave = Math.floor(state.waveTimer / 30) + 1;
   
@@ -1103,8 +635,13 @@ export function updateGame(state: GameState, dt: number): void {
     }
   } else {
     // Modalità normale o endless
-    if (state.wave >= 5 && state.wave % 5 === 0 && prevWave < state.wave && !state.bossActive) {
-      let bossIndex = Math.floor(state.wave / 5 - 1);
+    // Un boss ogni 5 ondate, in ordine. Se il boss precedente e' ancora vivo il successivo arriva appena
+    // viene sconfitto (prima veniva saltato: ad esempio il boss finale dell'ondata 40 poteva non comparire mai).
+    if (state.nextBossWave === undefined) state.nextBossWave = 5;
+    if (state.wave >= state.nextBossWave && !state.bossActive) {
+      let bossIndex = state.bossSpawnCount || 0;
+      state.bossSpawnCount = bossIndex + 1;
+      state.nextBossWave = Math.max(state.nextBossWave + 5, state.wave + 1);
       
       // Modalità Endless: dopo l'onda 40, i boss si ripetono con difficoltà crescente
       if (state.gameMode === 'endless' && bossIndex >= bossTypes.length) {
@@ -1203,13 +740,20 @@ export function updateGame(state: GameState, dt: number): void {
         break; 
       }
       case 'swarm': enemy.vel.x = toPlayer.x * enemy.speed + (Math.random() - 0.5) * 50; enemy.vel.y = toPlayer.y * enemy.speed + (Math.random() - 0.5) * 50; break;
-      case 'boss': { 
-        if (!enemy.attackState) { initBossAttack(enemy); }
+      case 'boss': {
         enemy.phaseTimer = (enemy.phaseTimer || 0) + gameDt;
-        const bossAngle = enemy.phaseTimer * 0.5;
-        enemy.vel.x = Math.cos(bossAngle) * enemy.speed;
-        enemy.vel.y = Math.sin(bossAngle) * enemy.speed;
-        updateBossAttack(state, enemy, gameDt);
+        updateBoss(state, enemy, gameDt, toPlayer);
+        // Boss Rush: senza nemici normali non si guadagnava esperienza (si restava a livello 1 con una sola arma).
+        // Ora il boss perde cristalli di esperienza ogni 5% di salute persa.
+        if (state.gameMode === 'boss_rush') {
+          const anyE = enemy as any;
+          if (anyE.expDropHp === undefined) anyE.expDropHp = enemy.maxHp;
+          while (enemy.hp > 0 && enemy.hp <= anyE.expDropHp - enemy.maxHp * 0.05) {
+            anyE.expDropHp -= enemy.maxHp * 0.05;
+            const a = Math.random() * Math.PI * 2;
+            spawnExpOrb(state, { x: enemy.pos.x + Math.cos(a) * (enemy.radius + 20), y: enemy.pos.y + Math.sin(a) * (enemy.radius + 20) }, 10 + 4 * state.bossRushIndex);
+          }
+        }
         break; 
       }
     }
@@ -1233,9 +777,10 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
   }
+  updateBossHazards(state, gameDt);
   for (const proj of state.projectiles) {
     if (proj.homing && proj.fromPlayer) { const target = getNearestEnemy(state, proj.pos, 500); if (target) { const targetAngle = angle(proj.pos, target.pos); const currentAngle = Math.atan2(proj.vel.y, proj.vel.x); const diff = targetAngle - currentAngle; const turn = Math.atan2(Math.sin(diff), Math.cos(diff)) * 3 * gameDt; const newAngle = currentAngle + turn; const speed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = Math.cos(newAngle) * speed; proj.vel.y = Math.sin(newAngle) * speed; } }
-    if (proj.type === 'boomerang_proj' && proj.fromPlayer) { const timeElapsed = proj.maxLifetime - proj.lifetime; if (timeElapsed > 1.0) { const toP = normalize({ x: player.pos.x - proj.pos.x, y: player.pos.y - proj.pos.y }); const currentSpeed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = toP.x * currentSpeed; proj.vel.y = toP.y * currentSpeed; } }
+    if (proj.type === 'boomerang_proj' && proj.fromPlayer) { const timeElapsed = proj.maxLifetime - proj.lifetime; if (timeElapsed > 1.0) { if (!(proj as any).returning) { (proj as any).returning = true; proj.hitIds = []; } const toP = normalize({ x: player.pos.x - proj.pos.x, y: player.pos.y - proj.pos.y }); const currentSpeed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = toP.x * currentSpeed; proj.vel.y = toP.y * currentSpeed; } }
     proj.pos.x += proj.vel.x * gameDt; proj.pos.y += proj.vel.y * gameDt; proj.lifetime -= gameDt;
     if (proj.trail) { proj.trail.push({ ...proj.pos }); if (proj.trail.length > 10) proj.trail.shift(); }
     if (proj.type === 'meteor_proj' && proj.lifetime <= 0.5 && proj.vel.y > 0) { for (const enemy of state.enemies) { const d = dist(proj.pos, enemy.pos); if (d < (proj.aoeRadius || 60)) { enemy.hp -= proj.damage; spawnDamageNumber(state, enemy.pos, proj.damage, proj.color, false, 'meteor'); spawnParticles(state, enemy.pos, proj.color, 3); } } spawnParticles(state, proj.pos, proj.color, 10); state.screenShake = 0.3; proj.lifetime = 0; }
@@ -1272,12 +817,21 @@ export function updateGame(state: GameState, dt: number): void {
   for (const dmgNum of state.damageNumbers) { dmgNum.lifetime -= gameDt; dmgNum.pos.y -= 30 * gameDt; }
   state.damageNumbers = state.damageNumbers.filter(d => d.lifetime > 0);
   for (const orb of state.expOrbs) { const d = dist(player.pos, orb.pos); if (d < player.magnetRange) orb.magnetized = true; if (orb.magnetized) { const dir = normalize({ x: player.pos.x - orb.pos.x, y: player.pos.y - orb.pos.y }); const speed = 400 + (player.magnetRange - d) * 3; orb.pos.x += dir.x * speed * gameDt; orb.pos.y += dir.y * speed * gameDt; } if (d < player.radius + orb.radius) { state.score += orb.value; const expGained = Math.floor(orb.value * (1 + player.expBonus)); player.exp += expGained; orb.value = 0; } }
-  for (const sword of state.laserSwords) { const sx = player.pos.x + Math.cos(sword.angle) * sword.distance; const sy = player.pos.y + Math.sin(sword.angle) * sword.distance; for (const enemy of state.enemies) { if (dist({ x: sx, y: sy }, enemy.pos) < sword.length + enemy.radius) { enemy.hp -= sword.damage * gameDt; spawnDamageNumber(state, enemy.pos, sword.damage * gameDt, sword.color, false, 'laser_swords'); spawnParticles(state, enemy.pos, sword.color, 1); } } }
+  // Spade laser: ogni nemico subisce al massimo un colpo per frame anche se tocca piu' spade
+  // (prima con 5 spade il danno sullo stesso nemico si moltiplicava per 5: arma troppo forte)
+  if (state.laserSwords.length > 0) {
+    const swordTips = state.laserSwords.map(sword => ({ x: player.pos.x + Math.cos(sword.angle) * sword.distance, y: player.pos.y + Math.sin(sword.angle) * sword.distance, sword }));
+    for (const enemy of state.enemies) {
+      const tip = swordTips.find(tp => dist(tp, enemy.pos) < tp.sword.length + enemy.radius);
+      if (tip) { enemy.hp -= tip.sword.damage * gameDt; spawnDamageNumber(state, enemy.pos, tip.sword.damage * gameDt, tip.sword.color, false, 'laser_swords'); spawnParticles(state, enemy.pos, tip.sword.color, 1); }
+    }
+  }
   if (player.exp >= player.expToNext && !state.levelUpPending) {
     if (player.level < 100) { 
       player.exp -= player.expToNext; 
       player.level++; 
-      player.expToNext = Math.floor(player.expToNext * 1.4 + 5); 
+      player.expToNext = Math.floor(10 + 7 * player.level + 0.6 * player.level * player.level); // curva piu' dolce: prima (x1.4 a livello) dopo 10 minuti si saliva quasi solo di 1 livello ogni 2 minuti
+      
       playShoot('levelup');
     }
     else { player.points += Math.floor(player.exp / 10); player.exp = 0; }
@@ -1288,12 +842,13 @@ export function updateGame(state: GameState, dt: number): void {
     if (e.hp <= 0) {
       spawnParticles(state, e.pos, e.color, 4); spawnExpOrb(state, e.pos, e.expValue); state.kills++; state.currentKills = (state.currentKills || 0) + 1; playShoot('explosion');
       let coinsReward = e.isBoss ? 75 : e.type === 'guardian' ? 15 : e.type.includes('asteroid') ? 2 : 2;
-      { const rawCoins = coinsReward * (1 + player.luckBonus + player.coinBonus); const whole = Math.floor(rawCoins); coinsReward = whole + (Math.random() < rawCoins - whole ? 1 : 0); }
+      { const rawCoins = coinsReward * (1 + Math.max(0, state.wave - 1) * 0.05) * (1 + player.luckBonus + player.coinBonus); const whole = Math.floor(rawCoins); coinsReward = whole + (Math.random() < rawCoins - whole ? 1 : 0); }
       state.coinsEarned += coinsReward;
       if (e.isBoss) { 
         state.diamondsEarned += 3; 
         state.bossActive = false; 
         state.bossesDefeated = (state.bossesDefeated || 0) + 1;
+        clearBossHazards(state, e.id);
         state.screenShake = 0.8; 
         spawnParticles(state, e.pos, '#ffff00', 20); 
         
@@ -1305,7 +860,7 @@ export function updateGame(state: GameState, dt: number): void {
         }
         
         // Modalità Normale: vittoria quando si sconfigge il boss finale all'onda 40
-        if (state.gameMode === 'normal' && state.wave >= 40 && e.type === 'boss_cosmic_horror') {
+        if (state.gameMode === 'normal' && e.type === 'boss_cosmic_horror') {
           state.gameOver = true;
           state.victory = true;
           state.score += 10000; // Bonus vittoria
@@ -1466,14 +1021,17 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   ctx.save(); ctx.translate(shakeX, shakeY);
   ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, width, height);
   drawNebulaBackground(ctx, camera, width, height);
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-  for (let i = 0; i < state.stars.length; i += 3) { 
-    const star = state.stars[i]; 
-    const parallax = star.layer === 0 ? 0.1 : star.layer === 1 ? 0.3 : 0.6;
-    const px = ((star.x - camera.x * parallax) % width + width) % width; 
-    const py = ((star.y - camera.y * parallax) % height + height) % height; 
-    ctx.fillRect(px, py, star.size, star.size); 
+  // stelle vicine in primo piano (parallasse piu' veloce dello sfondo = profondita')
+  for (let i = 0; i < state.stars.length; i += 2) {
+    const star = state.stars[i];
+    const parallax = star.layer === 0 ? 0.2 : star.layer === 1 ? 0.4 : 0.7;
+    const px = ((star.x - camera.x * parallax) % width + width) % width;
+    const py = ((star.y - camera.y * parallax) % height + height) % height;
+    ctx.globalAlpha = 0.35 + star.brightness * 0.45 * (0.75 + 0.25 * Math.sin(state.time * 2 + i));
+    ctx.fillStyle = star.layer === 2 ? '#dbeafe' : '#a5b4fc';
+    ctx.beginPath(); ctx.arc(px, py, star.size * (star.layer === 2 ? 0.75 : 0.5), 0, Math.PI * 2); ctx.fill();
   }
+  ctx.globalAlpha = 1;
   ctx.save();
   if (isMobile) { ctx.translate(width / 2, height / 2); ctx.scale(scaleFactor, scaleFactor); ctx.translate(-width / 2, -height / 2); }
   ctx.translate(width / 2 - camera.x, height / 2 - camera.y);
@@ -1491,9 +1049,17 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   }
   for (const drone of state.drones) { ctx.fillStyle = drone.color; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius * 0.4, 0, Math.PI * 2); ctx.fill(); }
   for (const wave of state.gravityWaves) { const alpha = 1 - (wave.lifetime / wave.maxLifetime); ctx.strokeStyle = wave.color; ctx.lineWidth = 2; ctx.globalAlpha = alpha * 0.5; ctx.beginPath(); ctx.arc(wave.pos.x, wave.pos.y, wave.radius, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
+  drawBossHazards(ctx, state, 'ground');
+  // Ombre morbide sotto i nemici: li "appoggiano" sulla scena invece di sembrare incollati sullo sfondo
+  ctx.fillStyle = 'rgba(0, 0, 8, 0.38)';
+  for (const enemy of state.enemies) {
+    const r = enemy.radius * (enemy.isBoss ? 1.05 : 1.15);
+    ctx.beginPath(); ctx.ellipse(enemy.pos.x + r * 0.18, enemy.pos.y + r * 0.42, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+  }
   for (const enemy of state.enemies) {
     ctx.save(); ctx.translate(enemy.pos.x, enemy.pos.y);
     ctx.fillStyle = enemy.color;
+    if (enemy.isBoss) drawBossAura(ctx, enemy, state.time);
     if (drawEnemySprite(ctx, enemy, state)) {
       if (enemy.isBoss) { ctx.fillStyle = '#333'; ctx.fillRect(-enemy.radius, -enemy.radius - 15, enemy.radius * 2, 8); ctx.fillStyle = '#ff0044'; ctx.fillRect(-enemy.radius, -enemy.radius - 15, enemy.radius * 2 * (enemy.hp / enemy.maxHp), 8); }
       ctx.restore();
@@ -1635,7 +1201,27 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     } else { ctx.beginPath(); ctx.arc(0, 0, enemy.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#00000033'; ctx.beginPath(); ctx.arc(enemy.radius * 0.2, -enemy.radius * 0.2, enemy.radius * 0.4, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
   }
-  for (const proj of state.projectiles) { ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
+  // Scie luminose dei proiettili (prima erano pallini piatti, quasi invisibili)
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const proj of state.projectiles) {
+    const tr = proj.trail;
+    if (!tr || tr.length < 2) continue;
+    const w = Math.max(2, Math.min(proj.radius, 14));
+    ctx.strokeStyle = proj.color;
+    ctx.globalAlpha = proj.fromPlayer ? 0.28 : 0.22;
+    ctx.lineWidth = w * 1.6;
+    ctx.beginPath(); ctx.moveTo(tr[0].x, tr[0].y);
+    for (let k = 1; k < tr.length; k++) ctx.lineTo(tr[k].x, tr[k].y);
+    ctx.lineTo(proj.pos.x, proj.pos.y);
+    ctx.stroke();
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath(); ctx.arc(proj.pos.x, proj.pos.y, w * 1.9, 0, Math.PI * 2);
+    ctx.fillStyle = proj.color; ctx.fill();
+  }
+  ctx.restore();
+  for (const proj of state.projectiles) { ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
   for (const p of state.particles) { const alpha = p.life / p.maxLife; ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.size * alpha, 0, Math.PI * 2); ctx.fill(); }
   if (showDamageNumbers) { for (const dmgNum of state.damageNumbers) { const alpha = dmgNum.lifetime / dmgNum.maxLifetime; const fontSize = dmgNum.isCrit ? 18 : 12; ctx.save(); ctx.globalAlpha = alpha; ctx.font = `bold ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.fillStyle = dmgNum.isCrit ? '#ffff00' : dmgNum.color; ctx.fillText(Math.floor(dmgNum.value).toString(), dmgNum.pos.x, dmgNum.pos.y); if (dmgNum.isCrit) { ctx.font = 'bold 9px monospace'; ctx.fillText('CRIT!', dmgNum.pos.x, dmgNum.pos.y - 12); } ctx.restore(); } }
   for (const nebula of state.nebulaPools) { const alpha = 1 - (nebula.lifetime / nebula.maxLifetime); ctx.save(); ctx.globalAlpha = alpha * 0.5; const gradient = ctx.createRadialGradient(nebula.pos.x, nebula.pos.y, 0, nebula.pos.x, nebula.pos.y, nebula.radius); gradient.addColorStop(0, nebula.color + 'cc'); gradient.addColorStop(0.4, nebula.color + '88'); gradient.addColorStop(0.7, nebula.color + '44'); gradient.addColorStop(1, nebula.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = alpha * 0.3; ctx.strokeStyle = nebula.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius * (0.8 + Math.sin(state.time * 5) * 0.1), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 4; i++) { const angle = (i / 4) * Math.PI * 2 + state.time * 2; const dist = nebula.radius * 0.5; const px = nebula.pos.x + Math.cos(angle) * dist; const py = nebula.pos.y + Math.sin(angle) * dist; ctx.fillStyle = nebula.color; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
@@ -1646,6 +1232,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   for (const probe of state.orbitingProbes) { const probeX = player.pos.x + Math.cos(probe.angle) * probe.distance; const probeY = player.pos.y + Math.sin(probe.angle) * probe.distance; if (probe.bombardmentZone.active) { const zoneX = player.pos.x + Math.cos(probe.bombardmentZone.angle) * probe.bombardmentZone.radius; const zoneY = player.pos.y + Math.sin(probe.bombardmentZone.angle) * probe.bombardmentZone.radius; ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = probe.color; ctx.beginPath(); ctx.arc(zoneX, zoneY, 20, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } ctx.save(); ctx.translate(probeX, probeY); ctx.rotate(probe.angle + Math.PI / 2); ctx.fillStyle = probe.color; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
   const gravityFieldAbility = player.abilities.find(a => a.type === 'gravity_field');
   if (gravityFieldAbility) { const fieldLvl = gravityFieldAbility.level; const fieldRadius = (150 + fieldLvl * 20) * (1 + player.areaBonus); const pulse = Math.sin(state.time * 3) * 0.1 + 0.9; ctx.save(); ctx.globalAlpha = 0.25 * pulse; const gradient = ctx.createRadialGradient(player.pos.x, player.pos.y, 0, player.pos.x, player.pos.y, fieldRadius); gradient.addColorStop(0, gravityFieldAbility.color + '00'); gradient.addColorStop(0.5, gravityFieldAbility.color + '33'); gradient.addColorStop(0.8, gravityFieldAbility.color + '66'); gradient.addColorStop(1, gravityFieldAbility.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 0.5 * pulse; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 2; ctx.setLineDash([5, 10]); ctx.lineDashOffset = -state.time * 20; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius * 0.9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.3; for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2 + state.time * 0.5; const innerRadius = fieldRadius * 0.3; const outerRadius = fieldRadius * 0.85; const x1 = player.pos.x + Math.cos(ang) * innerRadius; const y1 = player.pos.y + Math.sin(ang) * innerRadius; const x2 = player.pos.x + Math.cos(ang) * outerRadius; const y2 = player.pos.y + Math.sin(ang) * outerRadius; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } ctx.restore(); }
+  drawBossHazards(ctx, state, 'top');
   ctx.save(); ctx.translate(player.pos.x, player.pos.y);
   const flash = player.invincibleTimer > 0 && Math.sin(state.time * 30) > 0;
   if (!flash) { 
@@ -2123,3 +1710,6 @@ function getBossNameEN(key: string): string { const names: Record<string, string
 function getBossNameES(key: string): string { const names: Record<string, string> = { 'boss_death_star': 'ESTRELLA DE LA MUERTE', 'boss_xenomorph': 'REINA XENOMORFA', 'boss_cthulhu': 'CTHULHU CÓSMICO', 'boss_borg_cube': 'CUBO BORG', 'boss_space_kraken': 'KRAKEN ESPACIAL', 'boss_galaxy_devourer': 'DEVORADOR DE GALAXIAS', 'boss_void_emperor': 'EMPERADOR DEL VACÍO', 'boss_cosmic_horror': 'HORROR CÓSMICO' }; return names[key] || 'JEFE'; }
 function getBossNameFR(key: string): string { const names: Record<string, string> = { 'boss_death_star': 'ÉTOILE DE LA MORT', 'boss_xenomorph': 'REINE XÉNOMORPHE', 'boss_cthulhu': 'CTHULHU COSMIQUE', 'boss_borg_cube': 'CUBE BORG', 'boss_space_kraken': 'KRAKEN SPATIAL', 'boss_galaxy_devourer': 'DÉVOREUR DE GALAXIES', 'boss_void_emperor': 'EMPEREUR DU VIDE', 'boss_cosmic_horror': 'HORREUR COSMIQUE' }; return names[key] || 'BOSS'; }
 function getBossNameZH(key: string): string { const names: Record<string, string> = { 'boss_death_star': '死星', 'boss_xenomorph': '异形女王', 'boss_cthulhu': '宇宙克苏鲁', 'boss_borg_cube': '博格立方体', 'boss_space_kraken': '太空克拉肯', 'boss_galaxy_devourer': '银河吞噬者', 'boss_void_emperor': '虚空皇帝', 'boss_cosmic_horror': '宇宙恐怖' }; return names[key] || 'BOSS'; }
+
+// Aiuti usati dal modulo dei boss
+export { genId as newId, spawnParticles, shieldPulse };

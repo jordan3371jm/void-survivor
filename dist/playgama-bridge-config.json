@@ -1,0 +1,50 @@
+{
+  "advertisement": {
+    "minimumDelayBetweenInterstitial": 60,
+    "initialInterstitialDelay": 0,
+    "interstitial": {
+      "disable": false,
+      "preloadOnStart": "game_over",
+      "placementFallback": "game_over",
+      "placements": [
+        {
+          "id": "game_over"
+        }
+      ]
+    },
+    "rewarded": {
+      "disable": false,
+      "preloadOnStart": "revive",
+      "placementFallback": "revive",
+      "placements": [
+        {
+          "id": "revive"
+        },
+        {
+          "id": "double_coins"
+        },
+        {
+          "id": "speed_boost"
+        },
+        {
+          "id": "extra_life"
+        }
+      ]
+    }
+  },
+  "saas": {
+    "publicToken": "cmubugb0l0rnco00ht6j6pzq8",
+    "leaderboards": {
+      "platforms": [
+        "playgama",
+        "qa_tool"
+      ]
+    }
+  },
+  "leaderboards": [
+    {
+      "id": "void-survivor.scores",
+      "isMain": true
+    }
+  ]
+}
