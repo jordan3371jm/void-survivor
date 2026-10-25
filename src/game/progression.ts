@@ -55,6 +55,7 @@ function openChest(state: GameState, upgradeAbility: (a: any) => any, applyPassi
   const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type] && owned.has(EVOLUTIONS[a.type]!));
   if (evo) {
     evo.evolved = true;
+    state.evolutionsDone = (state.evolutionsDone || 0) + 1;
     evo.color = getEvolutionColor(evo.type) || evo.color;
     evo.damage *= 2.2;
     evo.cooldown = Math.max(0.05, evo.cooldown * 0.7);
@@ -96,7 +97,7 @@ export function updatePickups(state: GameState, dt: number, upgradeAbility: (a: 
     list.splice(i, 1);
     if (it.type === 'heart') { p.hp = Math.min(p.maxHp, p.hp + p.maxHp * 0.25); onSfx('levelup'); }
     else if (it.type === 'magnet') { for (const o of state.expOrbs) o.magnetized = true; onSfx('energy_shield'); }
-    else if (it.type === 'chest') { state.chestPending = openChest(state, upgradeAbility, applyPassives); onSfx('levelup'); }
+    else if (it.type === 'chest') { state.chestsOpened = (state.chestsOpened || 0) + 1; state.chestPending = openChest(state, upgradeAbility, applyPassives); onSfx('levelup'); }
   }
 }
 

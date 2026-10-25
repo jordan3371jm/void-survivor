@@ -50,6 +50,7 @@ export function updateProbes(state: GameState, dt: number): void {
     probe.pos = { x: p.pos.x + Math.cos(probe.angle) * probe.distance, y: p.pos.y + Math.sin(probe.angle) * probe.distance };
     probe.shootTimer -= dt;
     if (probe.shootTimer <= 0) {
+      playShoot(probe.type);
       probe.shootTimer = probe.shootInterval * (1 - Math.min(0.6, p.cooldownReduction)) * (evolved ? 0.6 : 1);
       // la zona bersaglio ruota davanti alla sonda, a distanza variabile dal giocatore
       const count = 1 + Math.floor(Math.max(0, p.projectileCountBonus) / 2) + (evolved ? 1 : 0);
@@ -92,7 +93,7 @@ export function updateProbes(state: GameState, dt: number): void {
 function drawBird(ctx: CanvasRenderingContext2D, pos: Vector2, heading: number, type: 'probe_x' | 'probe_y', time: number, evolved: boolean) {
   const st = STYLE[type];
   const flap = Math.sin(time * 14 + (type === 'probe_x' ? 0 : 1.7));
-  const s = evolved ? 1.25 : 1;
+  const s = evolved ? 1.6 : 1.3;
   ctx.save();
   ctx.translate(pos.x, pos.y);
   // alone
@@ -144,8 +145,8 @@ export function drawProbes(ctx: CanvasRenderingContext2D, state: GameState): voi
     const st = STYLE[b.type];
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     // mirino sulla zona d'impatto
-    ctx.globalAlpha = 0.25 + 0.25 * (b.t / b.dur); ctx.strokeStyle = st.core; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(b.tx, b.ty, b.r * (1 - 0.4 * (b.t / b.dur)), 0, TAU); ctx.stroke();
+    ctx.globalAlpha = 0.12 + 0.2 * (b.t / b.dur); ctx.strokeStyle = st.core; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(b.tx, b.ty, b.r * (0.75 - 0.45 * (b.t / b.dur)), 0, TAU); ctx.stroke();
     ctx.globalAlpha = 1;
     ctx.fillStyle = `rgba(${st.glow}, 0.45)`; ctx.beginPath(); ctx.arc(b.x, b.y, 9, 0, TAU); ctx.fill();
     ctx.fillStyle = b.type === 'probe_x' ? '#fff6d6' : '#d8c2ff'; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, TAU); ctx.fill();

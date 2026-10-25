@@ -1099,3 +1099,93 @@ svg { flex-shrink: 0; }
   .vs-chest-item { padding: 6px 10px; }
   .vs-chest-icon { width: 40px; height: 40px; }
 }
+
+/* --------------------------------------------------------------------------
+   Missioni e ricompensa giornaliera
+   -------------------------------------------------------------------------- */
+.vs-tab-dot { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: #f43f5e; color: #fff; font-size: 0.7rem; font-weight: 900; }
+.vs-missions-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; font-size: 0.82rem; color: var(--muted); font-weight: 700; }
+.vs-missions-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.vs-mission-list { display: flex; flex-direction: column; gap: 10px; }
+.vs-mission { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); text-align: left; transition: border-color 0.2s ease, background 0.2s ease; }
+.vs-mission.is-complete:not(.is-claimed) { border-color: color-mix(in srgb, var(--accent) 70%, transparent); background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 25%, transparent); }
+.vs-mission.is-claimed { opacity: 0.55; }
+.vs-mission-icon { display: grid; place-items: center; flex: 0 0 44px; height: 44px; border-radius: 12px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.vs-mission-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.vs-mission-body b { font-size: 0.92rem; line-height: 1.25; }
+.vs-mission-foot { display: flex; justify-content: space-between; gap: 8px; font-size: 0.78rem; }
+.vs-mission-reward { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: #fcd34d; }
+.vs-mission-reward svg:nth-of-type(2) { margin-left: 6px; color: #67e8f9; }
+.vs-mission-state { flex: 0 0 auto; min-width: 48px; text-align: center; font-weight: 900; color: var(--muted); font-size: 0.85rem; }
+.vs-mission-state.is-done { color: #34d399; display: grid; place-items: center; }
+.vs-daily-streak { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: linear-gradient(100deg, rgba(251, 146, 60, 0.16), rgba(251, 191, 36, 0.06)); border: 1px solid rgba(251, 191, 36, 0.3); text-align: left; }
+.vs-daily-streak > svg { color: #fb923c; flex-shrink: 0; }
+.vs-daily-streak div { display: flex; flex-direction: column; gap: 2px; }
+.vs-daily-streak span { font-size: 0.82rem; }
+.vs-daily-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.vs-daily-day { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 4px; border-radius: 14px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); }
+.vs-daily-day.is-big { grid-column: span 2; background: linear-gradient(140deg, rgba(168, 85, 247, 0.18), rgba(251, 191, 36, 0.12)); }
+.vs-daily-day.is-today { border-color: #fbbf24; background: rgba(251, 191, 36, 0.14); box-shadow: 0 0 20px rgba(251, 191, 36, 0.3); animation: vs-pulse-soft 1.6s ease-in-out infinite; }
+.vs-daily-day.is-claimed { border-color: rgba(52, 211, 153, 0.45); }
+.vs-daily-day.is-claimed .vs-daily-icon { color: #34d399; }
+.vs-daily-day.is-missed, .vs-daily-day.is-locked { opacity: 0.55; }
+.vs-daily-label { font-size: 0.72rem; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.vs-daily-icon { color: #fbbf24; height: 24px; display: grid; place-items: center; }
+.vs-daily-val { display: inline-flex; align-items: center; gap: 3px; font-size: 0.78rem; font-weight: 800; color: #fcd34d; }
+.vs-daily-val.is-gem { color: #67e8f9; }
+.vs-daily-done { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; border-radius: 14px; font-weight: 800; color: #34d399; background: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.35); }
+@keyframes vs-pulse-soft { 50% { transform: scale(1.04); } }
+@media (min-width: 560px) { .vs-daily-grid { grid-template-columns: repeat(7, 1fr); } .vs-daily-day.is-big { grid-column: span 1; } }
+
+/* --------------------------------------------------------------------------
+   Profilo e classifica
+   -------------------------------------------------------------------------- */
+.vs-avatar { display: inline-grid; place-items: center; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: radial-gradient(circle at 30% 25%, rgba(168, 85, 247, 0.35), rgba(8, 10, 26, 0.9)); border: 2px solid rgba(168, 85, 247, 0.55); line-height: 1; color: var(--muted); }
+.vs-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.vs-profile-card { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 18px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); text-align: left; }
+.vs-pf-avatar { position: relative; cursor: pointer; }
+.vs-pf-cam { position: absolute; right: 0; bottom: 0; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #7c3aed; border: 2px solid #c4b5fd; color: #fff; }
+.vs-profile-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.vs-pf-name { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 900; font-size: 1.25rem; letter-spacing: 0.03em; color: var(--text); text-align: left; overflow-wrap: anywhere; }
+.vs-pf-name svg { color: var(--muted); flex-shrink: 0; }
+.vs-input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-strong); color: var(--text); font: inherit; font-weight: 700; outline: none; }
+.vs-input:focus { border-color: var(--cyan); }
+.vs-avatar-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.vs-avatar-pick button { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; font-size: 1.1rem; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.vs-avatar-pick button.is-active { border-color: var(--cyan); background: rgba(34, 211, 238, 0.15); }
+.vs-stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 560px) { .vs-stat-grid { grid-template-columns: repeat(4, 1fr); } }
+.vs-stat-tile { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 6px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.02)); border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent); }
+.vs-stat-icon { color: var(--accent); }
+.vs-stat-tile b { font-family: var(--font-body); font-weight: 900; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.vs-stat-tile small { font-size: 0.72rem; color: var(--muted); font-weight: 700; text-align: center; line-height: 1.2; }
+.vs-section-title { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 0.95rem; font-weight: 800; text-align: left; }
+.vs-section-title svg { color: var(--cyan); }
+.vs-error { margin: 0; padding: 10px 12px; border-radius: 12px; color: #fecaca; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); font-size: 0.85rem; }
+.vs-rank-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.vs-rank-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px; background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line); text-align: left; }
+.vs-rank-row.is-me { border-color: var(--cyan); background: rgba(34, 211, 238, 0.1); }
+.vs-rank-pos { display: grid; place-items: center; flex: 0 0 32px; height: 32px; border-radius: 10px; font-weight: 900; background: rgba(255, 255, 255, 0.06); }
+.vs-rank-row.is-gold .vs-rank-pos { background: linear-gradient(135deg, #fde68a, #f59e0b); color: #2a1800; }
+.vs-rank-row.is-silver .vs-rank-pos { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #111827; }
+.vs-rank-row.is-bronze .vs-rank-pos { background: linear-gradient(135deg, #fdba74, #b45309); color: #2a1200; }
+.vs-rank-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-rank-name small { font-weight: 600; color: var(--muted); font-size: 0.75rem; }
+.vs-rank-score { font-family: var(--font-body); font-weight: 900; font-size: 1.05rem; color: #fcd34d; font-variant-numeric: tabular-nums; }
+.vs-leader-info { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 8px; text-align: center; color: var(--muted); }
+.vs-leader-info svg { color: var(--cyan); }
+.vs-leader-info p { margin: 0; max-width: 420px; line-height: 1.45; }
+
+/* --------------------------------------------------------------------------
+   Tutorial
+   -------------------------------------------------------------------------- */
+.vs-tutorial { align-items: center; text-align: center; max-width: 440px; }
+.vs-tutorial-skip { position: absolute; top: 12px; right: 12px; }
+.vs-tutorial-kicker { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.vs-tutorial-icon { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 28px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 36px color-mix(in srgb, var(--accent) 30%, transparent); animation: vs-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
+.vs-tutorial-text { margin: 0; line-height: 1.5; color: var(--text); opacity: 0.88; min-height: 4.5em; }
+.vs-tutorial-dots { display: flex; gap: 6px; }
+.vs-tutorial-dots span { width: 8px; height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); transition: width 0.2s ease, background 0.2s ease; }
+.vs-tutorial-dots span.is-active { width: 22px; background: var(--accent); }
+.vs-tutorial-nav { display: flex; gap: 10px; width: 100%; }
+.vs-tutorial-nav .vs-btn { flex: 1; }

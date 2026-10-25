@@ -10,13 +10,14 @@ import { playgama } from './game/playgame';
 import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
-import { recordRunForDailyChallenges } from './game/dailyChallenges';
+import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
 import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
 const AchievementsModal = React.lazy(() => import('./AchievementsModal').then((module) => ({ default: module.AchievementsModal })));
 const DailyRewardModal = React.lazy(() => import('./DailyRewardModal').then((module) => ({ default: module.DailyRewardModal })));
+const Tutorial = React.lazy(() => import('./Tutorial').then((module) => ({ default: module.Tutorial })));
 const DailyEventsModal = React.lazy(() => import('./DailyEventsModal').then((module) => ({ default: module.DailyEventsModal })));
 
 const ASSET_BASE_URL: string = import.meta.env.BASE_URL || '/';
@@ -146,6 +147,8 @@ export default function App() {
   const [gameLoadError, setGameLoadError] = useState(false);
   const [showDailyRewardModal, setShowDailyRewardModal] = useState(false);
   const [showDailyEventsModal, setShowDailyEventsModal] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const tutorialOpenRef = useRef(false);
   const [adNotice, setAdNotice] = useState('');
   const [chestRewards, setChestRewards] = useState<ChestReward[] | null>(null);
   const [rerollsLeft, setRerollsLeft] = useState(0);
@@ -396,7 +399,7 @@ export default function App() {
     ns = { ...ns, userProfile: profile };
     commitStore(ns);
     try {
-      recordRunForDailyChallenges({ kills: state.kills, time: state.time, level: state.player.level, wave: state.wave, bosses: state.bossesDefeated || 0, coins: state.coinsEarned });
+      recordRunForDailyChallenges({ kills: state.kills, time: state.time, level: state.player.level, wave: state.wave, bosses: state.bossesDefeated || 0, coins: state.coinsEarned, chests: state.chestsOpened || 0, evolutions: state.evolutionsDone || 0, bossRush: state.gameMode === 'boss_rush' });
     } catch (error) { console.warn('[App] Sfide giornaliere non aggiornate:', error); }
 
     void import('./game/auth')
@@ -433,7 +436,7 @@ export default function App() {
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        if (!pausedRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
+        if (!pausedRef.current && !tutorialOpenRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
 
         if (state.chestPending && !chestShownRef.current) {
           chestShownRef.current = true;
@@ -549,6 +552,7 @@ export default function App() {
       setScreen('playing');
       setAudioPaused(false);
       startBackgroundMusic();
+      if (!s.settings.tutorialDone) { tutorialOpenRef.current = true; setShowTutorial(true); }
     } catch (error) {
       setGameLoadError(true);
       setShowModeSelection(true);
@@ -630,9 +634,16 @@ export default function App() {
 
   const togglePause = useCallback(() => {
     const state = gameStateRef.current;
-    if (!state || state.gameOver || state.levelUpPending || state.revivePending) return;
+    if (tutorialOpenRef.current || !state || state.gameOver || state.levelUpPending || state.revivePending) return;
     setPausedState(!pausedRef.current);
   }, [setPausedState]);
+
+  const closeTutorial = useCallback(() => {
+    tutorialOpenRef.current = false;
+    setShowTutorial(false);
+    const current = storeRef.current;
+    if (!current.settings.tutorialDone) commitStore({ ...current, settings: { ...current.settings, tutorialDone: true } });
+  }, [commitStore]);
 
   const claimDoubleCoins = useCallback(async () => {
     if (!playgama.isRewardedSupported()) { showAdNotice(); return; }
@@ -889,13 +900,14 @@ export default function App() {
   // HOME
   // ---------------------------------------------------------------------------
   if (screen === 'home') {
+    const missionsClaimable = countClaimable();
     const unclaimedAchievements = store.userProfile?.completedAchievements?.filter(c => !c.claimed).length || 0;
     const currentShipInfo = SHIPS.find(s => s.type === store.currentShip) || SHIPS[0];
     const boostActive = store.settings.speedMultiplier === 2 && store.settings.speedBoostTimer > 0 && !store.settings.speedBoostPaused;
     const boostPaused = store.settings.speedBoostPaused && store.settings.speedBoostTimer > 0;
     const dock = [
       { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold' },
-      { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green' },
+      { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green', badge: missionsClaimable },
       { key: 'achievements', label: clean(t(lang, 'achievements')), icon: <Target size={20} />, onClick: () => setShowAchievementsModal(true), tone: 'orange', badge: unclaimedAchievements },
       { key: 'speed', label: clean(t(lang, 'speed_select')), icon: <Zap size={20} />, onClick: () => setShowSpeedModal(true), tone: 'cyan' },
       { key: 'leaderboard', label: clean(t(lang, 'leaderboard')), icon: <Trophy size={20} />, onClick: () => setShowLeaderboardModal(true), tone: 'gold' },
@@ -907,7 +919,7 @@ export default function App() {
         <header className="vs-home-top">
           <button type="button" className="vs-profile-pill" onClick={() => setShowProfileModal(true)}>
             <span className="vs-profile-avatar">{store.userProfile?.avatar && !store.userProfile.avatar.startsWith('http') && !store.userProfile.avatar.startsWith('data:') ? store.userProfile.avatar : <UserRound size={18} />}</span>
-            <span className="vs-profile-name">{store.userProfile?.name || clean(t(lang, 'profile'))}</span>
+            <span className="vs-profile-name">{store.userProfile?.name && store.userProfile.name !== 'Giocatore Locale' ? store.userProfile.name : L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员')}</span>
           </button>
           <div className="vs-home-top-right">
             {(boostActive || boostPaused) && (
@@ -1287,6 +1299,16 @@ export default function App() {
                 <Toggle on={store.settings.useJoystick} label={t(lang, 'virtual_joystick')} onChange={() => updateSetting('useJoystick', !store.settings.useJoystick)} />
               </div>
             </section>
+
+            <section className="vs-panel">
+              <div className="vs-row">
+                <div>
+                  <h2 className="vs-panel-title"><Sparkles size={18} />{L(lang, 'Tutorial', 'Tutorial', 'Tutorial', 'Tutoriel', '教程')}</h2>
+                  <p className="vs-muted vs-small">{store.settings.tutorialDone ? L(lang, 'Rivedi come si gioca nella prossima partita', 'Show how to play again in your next run', 'Vuelve a ver cómo se juega en la próxima partida', 'Revois comment jouer à la prochaine partie', '在下一局重新查看玩法') : L(lang, 'Verrà mostrato all’inizio della prossima partita', 'It will be shown at the start of your next run', 'Se mostrará al inicio de la próxima partida', 'Il sera affiché au début de la prochaine partie', '将在下一局开始时显示')}</p>
+                </div>
+                <Toggle on={!store.settings.tutorialDone} label="Tutorial" onChange={() => updateSetting('tutorialDone', !store.settings.tutorialDone)} />
+              </div>
+            </section>
           </div>
         </main>
       </div>
@@ -1418,6 +1440,11 @@ export default function App() {
           </div>
         )}
 
+        {showTutorial && (
+          <React.Suspense fallback={null}>
+            <Tutorial lang={lang} touch={typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches} onClose={closeTutorial} />
+          </React.Suspense>
+        )}
         {paused && !gameOver && !levelUpPending && (
           <div className="vs-overlay">
             <div className="vs-modal vs-modal--game">

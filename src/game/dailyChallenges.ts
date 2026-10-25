@@ -1,206 +1,190 @@
 import { storageGetItem, storageSetItem } from './storage';
-// Sistema di Challenge Giornaliere
-// 3 challenge che cambiano ogni 24h con ricompense
+import type { Language } from './i18n';
+// Missioni giornaliere, settimanali e mensili.
+// Ogni periodo estrae le sue missioni da un elenco in modo deterministico (stesse missioni per tutto il periodo).
 
-export interface DailyChallenge {
-  id: string;
-  type: 'kill_enemies' | 'survive_time' | 'reach_level' | 'reach_wave' | 'defeat_boss' | 'earn_coins';
-  target: number;
-  rewardCoins: number;
-  rewardDiamonds: number;
-  description: string;
-  icon: string;
+export type MissionPeriod = 'daily' | 'weekly' | 'monthly';
+export type MissionKind =
+  | 'kills' | 'bosses' | 'coins' | 'runs' | 'chests' | 'evolutions' | 'playtime' | 'boss_rush' // si sommano
+  | 'survive' | 'level' | 'wave';                                                               // record in una partita
+
+export interface Mission { id: string; kind: MissionKind; target: number; coins: number; diamonds: number; }
+export interface MissionProgress { current: number; claimed: boolean; }
+export interface MissionsPeriodState { key: string; missions: Mission[]; progress: Record<string, MissionProgress>; }
+export interface MissionsState { daily: MissionsPeriodState; weekly: MissionsPeriodState; monthly: MissionsPeriodState; }
+export interface RunSummary { kills: number; time: number; level: number; wave: number; bosses: number; coins: number; chests?: number; evolutions?: number; bossRush?: boolean; }
+
+const STORAGE_KEY = 'dailyChallenges';
+const ADDITIVE: MissionKind[] = ['kills', 'bosses', 'coins', 'runs', 'chests', 'evolutions', 'playtime', 'boss_rush'];
+
+const m = (kind: MissionKind, target: number, coins: number, diamonds: number): Mission => ({ id: `${kind}_${target}`, kind, target, coins, diamonds });
+
+const POOLS: Record<MissionPeriod, { pool: Mission[]; count: number }> = {
+  daily: {
+    count: 6,
+    pool: [
+      m('runs', 2, 150, 1), m('runs', 3, 250, 2),
+      m('kills', 300, 200, 2), m('kills', 800, 400, 4),
+      m('survive', 180, 200, 2), m('survive', 360, 400, 4),
+      m('level', 12, 200, 2), m('level', 20, 400, 4),
+      m('wave', 6, 250, 2), m('wave', 10, 450, 4),
+      m('bosses', 1, 500, 5),
+      m('coins', 800, 200, 2), m('coins', 2000, 400, 4),
+      m('chests', 1, 400, 4),
+      m('playtime', 600, 300, 3),
+    ],
+  },
+  weekly: {
+    count: 6,
+    pool: [
+      m('runs', 10, 1000, 10), m('runs', 15, 1500, 15),
+      m('kills', 4000, 1200, 12), m('kills', 8000, 2000, 20),
+      m('bosses', 5, 1500, 15), m('bosses', 8, 2200, 22),
+      m('survive', 600, 1200, 12), m('wave', 18, 1500, 15),
+      m('level', 35, 1200, 12),
+      m('chests', 4, 1500, 15),
+      m('evolutions', 1, 1800, 18),
+      m('coins', 12000, 1200, 12),
+      m('boss_rush', 2, 1200, 12),
+      m('playtime', 3600, 1500, 15),
+    ],
+  },
+  monthly: {
+    count: 6,
+    pool: [
+      m('runs', 40, 5000, 50),
+      m('kills', 25000, 6000, 60), m('kills', 40000, 8000, 80),
+      m('bosses', 25, 6000, 60),
+      m('survive', 900, 5000, 50), m('wave', 28, 6000, 60),
+      m('level', 50, 5000, 50),
+      m('chests', 15, 6000, 60),
+      m('evolutions', 5, 7000, 70),
+      m('coins', 60000, 5000, 50),
+      m('boss_rush', 8, 5000, 50),
+      m('playtime', 14400, 6000, 60),
+    ],
+  },
+};
+
+function pad(n: number) { return String(n).padStart(2, '0'); }
+export function periodKey(period: MissionPeriod, d = new Date()): string {
+  if (period === 'daily') return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (period === 'monthly') return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+  // settimana ISO (inizia il lunedi')
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const y0 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return `${t.getUTCFullYear()}-W${pad(Math.ceil(((t.getTime() - y0.getTime()) / 86400000 + 1) / 7))}`;
 }
 
-export interface DailyChallengeProgress {
-  challengeId: string;
-  current: number;
-  completed: boolean;
-  claimed: boolean;
+/** Millisecondi fino al prossimo rinnovo del periodo (ora locale). */
+export function msUntilReset(period: MissionPeriod, now = new Date()): number {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (period === 'weekly') { const day = now.getDay() || 7; next.setDate(now.getDate() + (8 - day)); }
+  if (period === 'monthly') { next.setFullYear(now.getFullYear(), now.getMonth() + 1, 1); }
+  return Math.max(0, next.getTime() - now.getTime());
 }
 
-export interface DailyChallengesState {
-  date: string; // YYYY-MM-DD
-  challenges: DailyChallenge[];
-  progress: DailyChallengeProgress[];
+function hashCode(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
 }
 
-// Genera 3 challenge casuali per oggi
-export function generateDailyChallenges(): DailyChallenge[] {
-  const today = new Date().toISOString().split('T')[0];
-  const seed = hashCode(today);
-  
-  const allChallenges: DailyChallenge[] = [
-    // Kill challenges
-    { id: 'kill_200', type: 'kill_enemies', target: 200, rewardCoins: 300, rewardDiamonds: 3, description: 'daily_kill_200', icon: '💀' },
-    { id: 'kill_500', type: 'kill_enemies', target: 500, rewardCoins: 600, rewardDiamonds: 6, description: 'daily_kill_500', icon: '💀' },
-    { id: 'kill_1000', type: 'kill_enemies', target: 1000, rewardCoins: 1200, rewardDiamonds: 12, description: 'daily_kill_1000', icon: '💀' },
-    
-    // Survive time challenges
-    { id: 'survive_5min', type: 'survive_time', target: 300, rewardCoins: 400, rewardDiamonds: 4, description: 'daily_survive_5min', icon: '⏱️' },
-    { id: 'survive_10min', type: 'survive_time', target: 600, rewardCoins: 800, rewardDiamonds: 8, description: 'daily_survive_10min', icon: '⏱️' },
-    { id: 'survive_15min', type: 'survive_time', target: 900, rewardCoins: 1200, rewardDiamonds: 12, description: 'daily_survive_15min', icon: '⏱️' },
-    
-    // Level challenges
-    { id: 'level_15', type: 'reach_level', target: 15, rewardCoins: 350, rewardDiamonds: 4, description: 'daily_level_15', icon: '⭐' },
-    { id: 'level_25', type: 'reach_level', target: 25, rewardCoins: 700, rewardDiamonds: 7, description: 'daily_level_25', icon: '⭐' },
-    { id: 'level_40', type: 'reach_level', target: 40, rewardCoins: 1400, rewardDiamonds: 14, description: 'daily_level_40', icon: '⭐' },
-    
-    // Wave challenges
-    { id: 'wave_10', type: 'reach_wave', target: 10, rewardCoins: 500, rewardDiamonds: 5, description: 'daily_wave_10', icon: '🌊' },
-    { id: 'wave_20', type: 'reach_wave', target: 20, rewardCoins: 1000, rewardDiamonds: 10, description: 'daily_wave_20', icon: '🌊' },
-    { id: 'wave_30', type: 'reach_wave', target: 30, rewardCoins: 2000, rewardDiamonds: 20, description: 'daily_wave_30', icon: '🌊' },
-    
-    // Boss challenges
-    { id: 'boss_1', type: 'defeat_boss', target: 1, rewardCoins: 800, rewardDiamonds: 8, description: 'daily_boss_1', icon: '👹' },
-    { id: 'boss_2', type: 'defeat_boss', target: 2, rewardCoins: 1500, rewardDiamonds: 15, description: 'daily_boss_2', icon: '👹' },
-    { id: 'boss_3', type: 'defeat_boss', target: 3, rewardCoins: 3000, rewardDiamonds: 30, description: 'daily_boss_3', icon: '👹' },
-    
-    // Coin challenges
-    { id: 'earn_1000', type: 'earn_coins', target: 1000, rewardCoins: 200, rewardDiamonds: 2, description: 'daily_earn_1000', icon: '💰' },
-    { id: 'earn_3000', type: 'earn_coins', target: 3000, rewardCoins: 500, rewardDiamonds: 5, description: 'daily_earn_3000', icon: '💰' },
-    { id: 'earn_5000', type: 'earn_coins', target: 5000, rewardCoins: 1000, rewardDiamonds: 10, description: 'daily_earn_5000', icon: '💰' },
-  ];
-  
-  // Seleziona 3 challenge diverse usando il seed
-  const selected: DailyChallenge[] = [];
-  const usedTypes = new Set<string>();
-  
-  for (let i = 0; i < 3 && selected.length < 3; i++) {
-    const index = (seed + i * 7) % allChallenges.length;
-    const challenge = allChallenges[index];
-    
-    // Evita di avere 2 challenge dello stesso tipo
-    if (!usedTypes.has(challenge.type)) {
-      selected.push(challenge);
-      usedTypes.add(challenge.type);
-    }
-  }
-  
-  // Se non abbiamo 3 challenge, riempi con quelle rimanenti
-  while (selected.length < 3) {
-    const remaining = allChallenges.filter(c => !selected.includes(c));
-    if (remaining.length === 0) break;
-    selected.push(remaining[Math.floor(Math.random() * remaining.length)]);
-  }
-  
-  return selected;
+/** Estrae le missioni del periodo: una per tipo, ordine deterministico dal seme. */
+function pickMissions(period: MissionPeriod, key: string): Mission[] {
+  const { pool, count } = POOLS[period];
+  let seed = hashCode(period + key);
+  const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+  const shuffled = [...pool].sort(() => rnd() - 0.5);
+  const out: Mission[] = []; const kinds = new Set<MissionKind>();
+  for (const mi of shuffled) { if (out.length >= count) break; if (!kinds.has(mi.kind)) { out.push(mi); kinds.add(mi.kind); } }
+  return out;
 }
 
-// Inizializza o aggiorna le challenge giornaliere
-export function getDailyChallengesState(): DailyChallengesState {
-  const today = new Date().toISOString().split('T')[0];
-  const saved = storageGetItem('dailyChallenges');
-  
-  if (saved) {
-    const state: DailyChallengesState = JSON.parse(saved);
-    
-    // Se è un nuovo giorno, rigenera le challenge
-    if (state.date !== today) {
-      const newState: DailyChallengesState = {
-        date: today,
-        challenges: generateDailyChallenges(),
-        progress: []
-      };
-      storageSetItem('dailyChallenges', JSON.stringify(newState));
-      return newState;
-    }
-    
-    return state;
-  }
-  
-  // Prima volta
-  const newState: DailyChallengesState = {
-    date: today,
-    challenges: generateDailyChallenges(),
-    progress: []
-  };
-  storageSetItem('dailyChallenges', JSON.stringify(newState));
-  return newState;
+function freshPeriod(period: MissionPeriod): MissionsPeriodState {
+  const key = periodKey(period);
+  return { key, missions: pickMissions(period, key), progress: {} };
 }
 
-// Aggiorna il progresso di una challenge
-export function updateChallengeProgress(
-  state: DailyChallengesState,
-  challengeId: string,
-  currentValue: number
-): DailyChallengesState {
-  const challenge = state.challenges.find(c => c.id === challengeId);
-  if (!challenge) return state;
-  
-  let progress = state.progress.find(p => p.challengeId === challengeId);
-  
-  if (!progress) {
-    progress = {
-      challengeId,
-      current: 0,
-      completed: false,
-      claimed: false
-    };
-    state.progress.push(progress);
+export function getMissionsState(): MissionsState {
+  let saved: Partial<MissionsState> = {};
+  try { const raw = storageGetItem(STORAGE_KEY); if (raw) saved = JSON.parse(raw); } catch { /* dati vecchi o corrotti */ }
+  const state = {} as MissionsState;
+  let changed = false;
+  for (const period of ['daily', 'weekly', 'monthly'] as MissionPeriod[]) {
+    const cur = saved[period];
+    if (cur && cur.key === periodKey(period) && Array.isArray(cur.missions) && cur.progress) state[period] = cur;
+    else { state[period] = freshPeriod(period); changed = true; }
   }
-  
-  progress.current = Math.max(progress.current, currentValue);
-  
-  if (progress.current >= challenge.target && !progress.completed) {
-    progress.completed = true;
-  }
-  
-  storageSetItem('dailyChallenges', JSON.stringify(state));
+  if (changed) saveMissionsState(state);
   return state;
 }
 
-// Riscuoti la ricompensa di una challenge
-export function claimChallengeReward(
-  state: DailyChallengesState,
-  challengeId: string
-): { newState: DailyChallengesState; coins: number; diamonds: number } | null {
-  const challenge = state.challenges.find(c => c.id === challengeId);
-  const progress = state.progress.find(p => p.challengeId === challengeId);
-  
-  if (!challenge || !progress || !progress.completed || progress.claimed) {
-    return null;
-  }
-  
-  progress.claimed = true;
-  storageSetItem('dailyChallenges', JSON.stringify(state));
-  
-  return {
-    newState: state,
-    coins: challenge.rewardCoins,
-    diamonds: challenge.rewardDiamonds
+export function saveMissionsState(state: MissionsState): void {
+  storageSetItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+/** Registra una partita conclusa in tutte le missioni attive. */
+export function recordRunForDailyChallenges(run: RunSummary): void {
+  const state = getMissionsState();
+  const value: Record<MissionKind, number> = {
+    kills: run.kills, bosses: run.bosses, coins: Math.round(run.coins), runs: 1, chests: run.chests || 0, evolutions: run.evolutions || 0,
+    playtime: Math.floor(run.time), boss_rush: run.bossRush ? 1 : 0, survive: Math.floor(run.time), level: run.level, wave: run.wave,
   };
-}
-
-// Hash function per generare seed dalla data
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash);
-}
-
-/**
- * Registra una partita conclusa nelle sfide del giorno (prima non veniva mai chiamato:
- * le sfide giornaliere non si potevano completare).
- * Uccisioni, boss e monete si sommano nella giornata; tempo, livello e ondata contano il record.
- */
-export function recordRunForDailyChallenges(run: { kills: number; time: number; level: number; wave: number; bosses: number; coins: number }): void {
-  const state = getDailyChallengesState();
-  for (const challenge of state.challenges) {
-    const current = state.progress.find(p => p.challengeId === challenge.id)?.current || 0;
-    let value = current;
-    switch (challenge.type) {
-      case 'kill_enemies': value = current + run.kills; break;
-      case 'defeat_boss': value = current + run.bosses; break;
-      case 'earn_coins': value = current + run.coins; break;
-      case 'survive_time': value = Math.max(current, Math.floor(run.time)); break;
-      case 'reach_level': value = Math.max(current, run.level); break;
-      case 'reach_wave': value = Math.max(current, run.wave); break;
+  for (const period of ['daily', 'weekly', 'monthly'] as MissionPeriod[]) {
+    const ps = state[period];
+    for (const mi of ps.missions) {
+      const pr = ps.progress[mi.id] || (ps.progress[mi.id] = { current: 0, claimed: false });
+      pr.current = ADDITIVE.includes(mi.kind) ? pr.current + value[mi.kind] : Math.max(pr.current, value[mi.kind]);
+      pr.current = Math.min(pr.current, mi.target);
     }
-    updateChallengeProgress(state, challenge.id, value);
   }
+  saveMissionsState(state);
+}
+
+/** Riscuote una missione completata; restituisce la ricompensa o null. */
+export function claimMission(state: MissionsState, period: MissionPeriod, id: string): { coins: number; diamonds: number } | null {
+  const mi = state[period].missions.find(x => x.id === id);
+  const pr = state[period].progress[id];
+  if (!mi || !pr || pr.claimed || pr.current < mi.target) return null;
+  pr.claimed = true;
+  saveMissionsState(state);
+  return { coins: mi.coins, diamonds: mi.diamonds };
+}
+
+export function countClaimable(state = getMissionsState()): number {
+  let n = 0;
+  for (const period of ['daily', 'weekly', 'monthly'] as MissionPeriod[]) {
+    for (const mi of state[period].missions) { const pr = state[period].progress[mi.id]; if (pr && !pr.claimed && pr.current >= mi.target) n++; }
+  }
+  return n;
+}
+
+const fmtTime = (s: number) => { const mm = Math.floor(s / 60); return s >= 3600 ? `${Math.floor(s / 3600)}h${mm % 60 ? ' ' + (mm % 60) + 'm' : ''}` : `${mm} min`; };
+
+/** Testo della missione nella lingua scelta. */
+export function missionText(mi: Mission, lang: Language): string {
+  const n = mi.target;
+  const T: Record<MissionKind, [string, string, string, string, string]> = {
+    kills: [`Elimina ${n} nemici`, `Defeat ${n} enemies`, `Elimina ${n} enemigos`, `Élimine ${n} ennemis`, `击败${n}个敌人`],
+    bosses: [`Sconfiggi ${n} boss`, `Defeat ${n} bosses`, `Derrota ${n} jefes`, `Vaincs ${n} boss`, `击败${n}个Boss`],
+    coins: [`Guadagna ${n} monete`, `Earn ${n} coins`, `Gana ${n} monedas`, `Gagne ${n} pièces`, `赚取${n}金币`],
+    runs: [`Gioca ${n} partite`, `Play ${n} runs`, `Juega ${n} partidas`, `Joue ${n} parties`, `进行${n}场游戏`],
+    chests: [`Apri ${n} scrigni dei boss`, `Open ${n} boss chests`, `Abre ${n} cofres de jefe`, `Ouvre ${n} coffres de boss`, `打开${n}个Boss宝箱`],
+    evolutions: [`Evolvi ${n} armi`, `Evolve ${n} weapons`, `Evoluciona ${n} armas`, `Fais évoluer ${n} armes`, `进化${n}把武器`],
+    playtime: [`Gioca per ${fmtTime(n)} in totale`, `Play for ${fmtTime(n)} in total`, `Juega ${fmtTime(n)} en total`, `Joue ${fmtTime(n)} au total`, `累计游戏${fmtTime(n)}`],
+    boss_rush: [`Completa ${n} partite Boss Rush`, `Play ${n} Boss Rush runs`, `Juega ${n} partidas Boss Rush`, `Joue ${n} parties Boss Rush`, `进行${n}场Boss Rush`],
+    survive: [`Sopravvivi ${fmtTime(n)} in una partita`, `Survive ${fmtTime(n)} in one run`, `Sobrevive ${fmtTime(n)} en una partida`, `Survis ${fmtTime(n)} en une partie`, `单局存活${fmtTime(n)}`],
+    level: [`Raggiungi il livello ${n}`, `Reach level ${n}`, `Alcanza el nivel ${n}`, `Atteins le niveau ${n}`, `达到${n}级`],
+    wave: [`Raggiungi l'ondata ${n}`, `Reach wave ${n}`, `Alcanza la oleada ${n}`, `Atteins la vague ${n}`, `到达第${n}波`],
+  };
+  const idx = { it: 0, en: 1, es: 2, fr: 3, zh: 4 }[lang] ?? 1;
+  return T[mi.kind][idx];
+}
+
+/** Valore leggibile del progresso (minuti per le missioni a tempo). */
+export function missionValue(mi: Mission, v: number): string {
+  return mi.kind === 'survive' || mi.kind === 'playtime' ? `${Math.floor(v / 60)}/${Math.floor(mi.target / 60)} min` : `${Math.floor(v)}/${mi.target}`;
 }

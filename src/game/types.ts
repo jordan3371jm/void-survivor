@@ -355,6 +355,8 @@ export interface GameState {
   victory?: boolean; // true se la partita e' finita con una vittoria
   bossHazards?: unknown[];
   pickups?: Pickup[]; // cuori, magneti e scrigni a terra
+  chestsOpened?: number;
+  evolutionsDone?: number;
   chestPending?: ChestReward[] | null; // scrigno aperto: la partita aspetta che il giocatore veda le ricompense
   rerolls?: number; // "rigenera" disponibili nel level up // zone di pericolo degli attacchi dei boss (vedi bosses.ts)
   touchDir?: Vector2 | null; // direzione analogica da touch/joystick (lunghezza 0..1)
