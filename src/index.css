@@ -1180,7 +1180,9 @@ svg { flex-shrink: 0; }
    Tutorial
    -------------------------------------------------------------------------- */
 .vs-tutorial { align-items: center; text-align: center; max-width: 440px; }
-.vs-tutorial-skip { position: absolute; top: 12px; right: 12px; }
+.vs-tutorial-skip { position: absolute; top: 12px; right: 12px; display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 999px; font-size: 0.78rem; font-weight: 800; color: var(--muted); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); transition: color 0.2s ease, border-color 0.2s ease; }
+.vs-tutorial-skip:hover { color: var(--text); border-color: var(--line-strong); }
+.vs-tutorial-kicker { margin-top: 26px; }
 .vs-tutorial-kicker { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .vs-tutorial-icon { display: grid; place-items: center; width: 92px; height: 92px; border-radius: 28px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: 0 0 36px color-mix(in srgb, var(--accent) 30%, transparent); animation: vs-pop 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3); }
 .vs-tutorial-text { margin: 0; line-height: 1.5; color: var(--text); opacity: 0.88; min-height: 4.5em; }

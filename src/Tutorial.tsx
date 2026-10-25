@@ -53,7 +53,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
   return (
     <div className="vs-overlay vs-overlay--levelup">
       <div className="vs-modal vs-tutorial" style={{ ['--accent' as any]: s.color }}>
-        <button type="button" className="vs-icon-btn vs-tutorial-skip" onClick={onClose} aria-label="Skip"><X size={18} /></button>
+        <button type="button" className="vs-tutorial-skip" onClick={onClose}>{L(lang, 'Salta tutorial', 'Skip tutorial', 'Saltar tutorial', 'Passer le tutoriel', '跳过教程')}<X size={15} /></button>
         <span className="vs-tutorial-kicker">{L(lang, 'Tutorial', 'Tutorial', 'Tutorial', 'Tutoriel', '教程')} · {step + 1}/{steps.length}</span>
         <div className="vs-tutorial-icon" key={step}>{s.icon}</div>
         <h2 className="vs-modal-title">{s.title}</h2>
