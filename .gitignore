@@ -5,3 +5,5 @@ Thumbs.db
 .vscode/*
 .idea
 *.zip
+__art.html
+public/__tmp/
