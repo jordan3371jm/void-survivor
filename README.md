@@ -53,3 +53,14 @@ Ogni boss successivo nella stessa partita è più forte.
 | Divoratore di Galassie | buco nero, braccia a spirale, raggi cosmici, pioggia di stelle |
 | Imperatore del Vuoto | lance del vuoto, nova oscura, giudizio a croce, teletrasporto |
 | Orrore Cosmico | sguardi della follia, squarci nella realtà, tempesta di occhi, evocazioni, abisso (fase 2) |
+
+## Progressione in partita
+
+- **Scrigno del tesoro**: ogni boss sconfitto lascia uno scrigno. Aprendolo si potenziano fino a
+  3 abilità, si recuperano HP, si guadagnano monete e, se possibile, un'arma si evolve.
+- **Evoluzione delle armi**: arma al livello massimo + passiva abbinata + scrigno di un boss =
+  arma **EVOLUTA** (danno x2,2, ricarica più rapida). L'abbinamento è indicato nel negozio
+  (scheda Attive) e nelle carte del level up.
+- **Oggetti a terra**: cuori (curano il 25%) e magneti (raccolgono tutta l'esperienza).
+- **Rigenera**: nel level up si possono cambiare le 3 scelte (2 volte per partita, +1 per ogni boss; tasto R su PC).
+- **Boss Rush**: si parte con 300 di vita, senza potenziamenti del negozio e senza Buco Nero.

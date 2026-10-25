@@ -87,7 +87,7 @@ export async function bridgeSaveScore(userId: string, username: string, score: n
       return true;
     }
     
-    await bridge.leaderboards.setScore(LEADERBOARD_ID, score);
+    await bridge.leaderboards.setScore(LEADERBOARD_ID, Math.round(score));
     return true;
   } catch (error) {
     return true;
@@ -234,4 +234,43 @@ export async function bridgeLoadPlayerData(userId: string): Promise<any> {
     console.error('[Bridge] Errore recupero dati giocatore:', error);
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Classifica globale Playgama. Il tipo dipende dalla piattaforma:
+//  - in_game: le voci arrivano dal backend Playgama e le mostriamo noi;
+//  - native_popup: la piattaforma apre la sua finestra di classifica;
+//  - native: la classifica e' solo nell'interfaccia della piattaforma;
+//  - not_available: nessuna classifica online, mostriamo i record personali.
+// ---------------------------------------------------------------------------
+export type LeaderboardKind = 'in_game' | 'native' | 'native_popup' | 'not_available';
+export interface GlobalEntry { id: string; name: string; photo?: string; score: number; rank: number; }
+
+export function getLeaderboardKind(): LeaderboardKind {
+  const type = (window as any).bridge?.leaderboards?.type;
+  return type === 'in_game' || type === 'native' || type === 'native_popup' ? type : 'not_available';
+}
+
+export async function fetchGlobalLeaderboard(): Promise<GlobalEntry[]> {
+  const bridge = (window as any).bridge;
+  if (getLeaderboardKind() !== 'in_game' || !bridge?.leaderboards?.getEntries) return [];
+  const entries = await bridge.leaderboards.getEntries(LEADERBOARD_ID);
+  return (entries || []).map((e: any, i: number) => ({ id: String(e.id ?? i), name: e.name || 'Player', photo: e.photo, score: Math.round(Number(e.score) || 0), rank: Number(e.rank) || i + 1 }));
+}
+
+export async function showNativeLeaderboard(): Promise<void> {
+  const bridge = (window as any).bridge;
+  if (bridge?.leaderboards?.showNativePopup) await bridge.leaderboards.showNativePopup(LEADERBOARD_ID);
+}
+
+export interface PlatformPlayer { supported: boolean; authorized: boolean; id?: string; name?: string; photo?: string; }
+export function getPlatformPlayer(): PlatformPlayer {
+  const pl = (window as any).bridge?.player;
+  if (!pl) return { supported: false, authorized: false };
+  return { supported: !!pl.isAuthorizationSupported, authorized: !!pl.isAuthorized, id: pl.id || undefined, name: pl.name || undefined, photo: Array.isArray(pl.photos) ? pl.photos[0] : undefined };
+}
+export async function authorizePlatformPlayer(): Promise<boolean> {
+  const pl = (window as any).bridge?.player;
+  if (!pl?.authorize) return false;
+  try { await pl.authorize(); return !!pl.isAuthorized; } catch { return false; }
 }

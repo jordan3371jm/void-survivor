@@ -6,6 +6,12 @@ let musicNodes: any[] = [];
 let customAudioElement: HTMLAudioElement | null = null;
 let useCustomMusic = false;
 let musicMaster: GainNode | null = null;
+// Colonna sonora del gioco (public/audio/bgm.mp3): in streaming, parte all'inizio della partita
+let trackAudio: HTMLAudioElement | null = null;
+let trackFailed = false;
+const TRACK_URL = `${import.meta.env.BASE_URL || '/'}audio/bgm.mp3`;
+// la colonna sonora resta in sottofondo: al 100% del cursore suona al 32%, cosi' colpi ed effetti si sentono bene
+const TRACK_GAIN = 0.32;
 const lastSfxAt: Record<string, number> = {};
 
 function getAudioContext(): AudioContext {
@@ -18,8 +24,9 @@ function getAudioContext(): AudioContext {
 export function setSfxVolume(volume: number) { sfxVolume = Math.max(0, Math.min(1, volume)); }
 export function setMusicVolume(volume: number) {
   musicVolume = Math.max(0, Math.min(1, volume));
-  if (customAudioElement) customAudioElement.volume = musicVolume;
-  if (musicMaster) musicMaster.gain.value = musicVolume * 0.35;
+  if (customAudioElement) customAudioElement.volume = musicVolume * TRACK_GAIN;
+  if (trackAudio) trackAudio.volume = musicVolume * TRACK_GAIN;
+  if (musicMaster) musicMaster.gain.value = musicVolume * 0.2;
 }
 
 export function loadCustomMusic(file: File): Promise<void> {
@@ -30,7 +37,7 @@ export function loadCustomMusic(file: File): Promise<void> {
       customAudioElement = new Audio();
       customAudioElement.src = audioUrl;
       customAudioElement.loop = true;
-      customAudioElement.volume = musicVolume;
+      customAudioElement.volume = musicVolume * TRACK_GAIN;
       useCustomMusic = true;
       customAudioElement.addEventListener('canplaythrough', () => resolve());
       customAudioElement.addEventListener('error', () => reject(new Error('Errore nel caricamento del file audio')));
@@ -46,11 +53,27 @@ export function startBackgroundMusic() {
   if (useCustomMusic && customAudioElement) {
     try {
       customAudioElement.currentTime = 0;
-      customAudioElement.volume = musicVolume;
+      customAudioElement.volume = musicVolume * TRACK_GAIN;
       customAudioElement.play().catch(e => console.error('Errore play musica custom:', e));
       isMusicPlaying = true;
       return;
     } catch (error) { console.error('Errore nella riproduzione della musica personalizzata:', error); }
+  }
+  if (!trackFailed) {
+    try {
+      if (!trackAudio) {
+        trackAudio = new Audio(TRACK_URL);
+        trackAudio.loop = true;
+        trackAudio.preload = 'auto';
+        // se il file non si carica si torna alla musica sintetizzata
+        trackAudio.addEventListener('error', () => { trackFailed = true; trackAudio = null; if (isMusicPlaying) { isMusicPlaying = false; startBackgroundMusic(); } });
+      }
+      trackAudio.volume = musicVolume * TRACK_GAIN;
+      trackAudio.currentTime = 0; // ogni partita riparte dall'inizio del brano
+      trackAudio.play().catch(e => console.warn('[Audio] musica in attesa di un tocco:', e));
+      isMusicPlaying = true;
+      return;
+    } catch (error) { trackFailed = true; trackAudio = null; }
   }
   try {
     const ctx = getAudioContext();
@@ -66,7 +89,7 @@ export function startBackgroundMusic() {
 
 function createMusicNodes(ctx: AudioContext) {
   const masterGain = ctx.createGain();
-  masterGain.gain.value = musicVolume * 0.35;
+  masterGain.gain.value = musicVolume * 0.2;
   musicMaster = masterGain;
   masterGain.connect(ctx.destination);
   musicNodes.push(masterGain);
@@ -300,6 +323,7 @@ export function stopBackgroundMusic() {
   if (isMusicPlaying) {
     try {
       if (useCustomMusic && customAudioElement) { customAudioElement.pause(); customAudioElement.currentTime = 0; }
+      if (trackAudio) trackAudio.pause();
       musicNodes.forEach(node => {
         if (node.stop) { try { node.stop(); } catch (e) {} }
         if (node.interval) clearInterval(node.interval);
@@ -350,7 +374,8 @@ export function playShoot(type: string = 'laser') {
       case 'quantum_bounce': osc.type = 'square'; osc.frequency.setValueAtTime(1500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.08); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.08); break;
       case 'ion_storm': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(2000, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.06 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3); break;
       case 'stellar_blackhole': osc.type = 'sine'; osc.frequency.setValueAtTime(50, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(20, ctx.currentTime + 1.0); gain.gain.setValueAtTime(0.1 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.0); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 1.0); break;
-      case 'probe_x': case 'probe_y': osc.type = 'square'; osc.frequency.setValueAtTime(1100, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.07); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.07); break;
+      case 'probe_x': osc.type = 'triangle'; osc.frequency.setValueAtTime(1500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(2200, ctx.currentTime + 0.05); osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.025 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
+      case 'probe_y': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(420, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + 0.05); osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.022 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
       case 'antimatter_bomb': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.6); gain.gain.setValueAtTime(0.08 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6); break;
       case 'orbiting_satellites': osc.type = 'triangle'; osc.frequency.setValueAtTime(700, ctx.currentTime); osc.frequency.setValueAtTime(900, ctx.currentTime + 0.05); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
       case 'asteroid_fragment': osc.type = 'triangle'; osc.frequency.setValueAtTime(350, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
@@ -398,10 +423,50 @@ export function setAudioPaused(paused: boolean) {
     if (paused) {
       if (audioCtx && audioCtx.state === 'running') audioCtx.suspend().catch(() => {});
       if (customAudioElement && !customAudioElement.paused) customAudioElement.pause();
+      if (trackAudio && !trackAudio.paused) trackAudio.pause();
     } else {
       if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
       if (useCustomMusic && customAudioElement && isMusicPlaying && customAudioElement.paused) customAudioElement.play().catch(() => {});
+      else if (!useCustomMusic && trackAudio && isMusicPlaying && trackAudio.paused) trackAudio.play().catch(() => {});
     }
+  } catch { /* audio non disponibile */ }
+}
+
+// ---------------------------------------------------------------------------
+// Suoni di impatto: ogni arma ha il suo "colpo a segno" (timbro, altezza, durata)
+// ---------------------------------------------------------------------------
+type HitDef = [OscillatorType, number, number, number, number]; // forma, freq. iniziale, freq. finale, durata, volume
+const HIT_SOUNDS: Record<string, HitDef> = {
+  homing_laser: ['square', 1400, 600, 0.05, 0.025], photon_gun: ['square', 1700, 900, 0.04, 0.022],
+  ion_gun: ['sawtooth', 900, 300, 0.06, 0.022], drone_swarm: ['triangle', 1200, 800, 0.03, 0.02],
+  gravity_waves: ['sine', 160, 80, 0.12, 0.04], void_lance: ['sawtooth', 520, 140, 0.08, 0.03],
+  cryo_lance: ['sine', 2600, 1600, 0.06, 0.02], energy_shield: ['sine', 900, 1300, 0.07, 0.03],
+  asteroid_fragment: ['triangle', 220, 90, 0.07, 0.035], antimatter_bomb: ['sawtooth', 200, 60, 0.12, 0.03],
+  laser_swords: ['sawtooth', 700, 1000, 0.04, 0.018], kinetic_darts: ['triangle', 1500, 700, 0.03, 0.022],
+  meteor: ['square', 140, 50, 0.14, 0.04], neutronium_boomerang: ['triangle', 600, 1000, 0.05, 0.025],
+  orbiting_satellites: ['triangle', 1000, 700, 0.03, 0.018], plasma_flamethrower: ['sawtooth', 300, 180, 0.07, 0.022],
+  gravity_field: ['sine', 220, 160, 0.06, 0.015], corrosive_nebula: ['sine', 420, 260, 0.06, 0.015],
+  quantum_bounce: ['square', 2000, 1200, 0.04, 0.022], ion_storm: ['sawtooth', 2400, 400, 0.06, 0.025],
+  stellar_blackhole: ['sine', 90, 40, 0.3, 0.05], probe_x: ['square', 380, 120, 0.09, 0.03], probe_y: ['square', 300, 100, 0.09, 0.03],
+};
+const lastHitAt: Record<string, number> = {};
+
+/** Suono del colpo a segno di un'arma (limitato a uno ogni 70 ms per arma). */
+export function playHit(type: string) {
+  const def = HIT_SOUNDS[type];
+  if (!def || sfxVolume <= 0) return;
+  try {
+    const ctx = getAudioContext();
+    if (ctx.state !== 'running') return;
+    const now = ctx.currentTime;
+    if (now - (lastHitAt[type] ?? -1) < 0.07) return;
+    lastHitAt[type] = now;
+    const [wave, f0, f1, dur, vol] = def;
+    const osc = ctx.createOscillator(); const gain = ctx.createGain();
+    osc.type = wave; osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.setValueAtTime(f0, now); osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + dur);
+    gain.gain.setValueAtTime(vol * sfxVolume, now); gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    osc.start(now); osc.stop(now + dur + 0.01);
   } catch { /* audio non disponibile */ }
 }
 

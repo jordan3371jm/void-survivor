@@ -1,118 +1,85 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { CalendarDays, CalendarRange, Check, Clock, Coins, Crown, Gem, Gift, Rocket, Skull, Sparkles, Star, Swords, Timer, Waves, X, Sun } from 'lucide-react';
 import { GameStore } from './game/store';
-import { t, Language } from './game/i18n';
-import { getDailyChallengesState, claimChallengeReward, DailyChallengesState } from './game/dailyChallenges';
+import { Language } from './game/i18n';
+import { claimMission, getMissionsState, missionText, missionValue, msUntilReset, MissionKind, MissionPeriod, MissionsState } from './game/dailyChallenges';
 
-interface DailyEventsModalProps {
-  store: GameStore;
-  setStore: (store: GameStore) => void;
-  lang: Language;
-  onClose: () => void;
+interface DailyEventsModalProps { store: GameStore; setStore: (store: GameStore) => void; lang: Language; onClose: () => void; }
+
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+
+const ICONS: Record<MissionKind, React.ReactNode> = {
+  kills: <Skull size={22} />, bosses: <Crown size={22} />, coins: <Coins size={22} />, runs: <Rocket size={22} />, chests: <Gift size={22} />,
+  evolutions: <Sparkles size={22} />, playtime: <Clock size={22} />, boss_rush: <Swords size={22} />, survive: <Timer size={22} />, level: <Star size={22} />, wave: <Waves size={22} />,
+};
+const COLORS: Record<MissionKind, string> = {
+  kills: '#ff6b8b', bosses: '#fbbf24', coins: '#f5c542', runs: '#22d3ee', chests: '#f59e0b', evolutions: '#fde047',
+  playtime: '#a78bfa', boss_rush: '#f97316', survive: '#34d399', level: '#c084fc', wave: '#38bdf8',
+};
+
+function fmtCountdown(ms: number, lang: Language): string {
+  const s = Math.floor(ms / 1000); const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600); const m = Math.floor((s % 3600) / 60);
+  const dl = L(lang, 'g', 'd', 'd', 'j', '天');
+  return d > 0 ? `${d}${dl} ${h}h` : `${h}h ${m}m`;
 }
 
 export const DailyEventsModal: React.FC<DailyEventsModalProps> = ({ store, setStore, lang, onClose }) => {
-  const [challengesState, setChallengesState] = useState<DailyChallengesState>(getDailyChallengesState());
+  const [state, setState] = useState<MissionsState>(() => getMissionsState());
+  const [period, setPeriod] = useState<MissionPeriod>('daily');
+  const [, tick] = useState(0);
+  useEffect(() => { const id = window.setInterval(() => tick(x => x + 1), 30000); return () => window.clearInterval(id); }, []);
 
-  const handleClaim = (challengeId: string) => {
-    const result = claimChallengeReward(challengesState, challengeId);
-    if (result) {
-      // Aggiungi le ricompense al negozio
-      const newStore = {
-        ...store,
-        coins: store.coins + result.coins,
-        diamonds: store.diamonds + result.diamonds
-      };
-      setStore(newStore);
-      setChallengesState({ ...result.newState });
-    }
+  const claim = (id: string) => {
+    const r = claimMission(state, period, id);
+    if (!r) return;
+    setStore({ ...store, coins: store.coins + r.coins, diamonds: store.diamonds + r.diamonds });
+    setState({ ...state });
   };
 
+  const tabs: { key: MissionPeriod; label: string; icon: React.ReactNode }[] = [
+    { key: 'daily', label: L(lang, 'Giornaliere', 'Daily', 'Diarias', 'Quotidiennes', '每日'), icon: <Sun size={16} /> },
+    { key: 'weekly', label: L(lang, 'Settimanali', 'Weekly', 'Semanales', 'Hebdo', '每周'), icon: <CalendarDays size={16} /> },
+    { key: 'monthly', label: L(lang, 'Mensili', 'Monthly', 'Mensuales', 'Mensuelles', '每月'), icon: <CalendarRange size={16} /> },
+  ];
+  const claimableIn = (p: MissionPeriod) => state[p].missions.filter(mi => { const pr = state[p].progress[mi.id]; return pr && !pr.claimed && pr.current >= mi.target; }).length;
+  const ps = state[period];
+  const done = ps.missions.filter(mi => (ps.progress[mi.id]?.current || 0) >= mi.target).length;
+
   return (
-    <div className="vs-legacy-backdrop">
-      <div className="vs-legacy-modal max-w-md" style={{ ['--accent' as any]: '#34d399' }}>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">📅 {t(lang, 'daily_events')}</h2>
-          <button onClick={onClose} className="vs-icon-btn text-xl">×</button>
+    <div className="vs-modal-backdrop" onClick={onClose}>
+      <div className="vs-modal vs-modal--wide vs-missions" onClick={e => e.stopPropagation()}>
+        <div className="vs-modal-head">
+          <h2><CalendarDays size={20} />{L(lang, 'Missioni', 'Missions', 'Misiones', 'Missions', '任务')}</h2>
+          <button type="button" className="vs-icon-btn" onClick={onClose} aria-label="Close"><X size={20} /></button>
         </div>
-
-        <p className="text-gray-300 text-sm mb-6 text-center">{t(lang, 'daily_events_desc')}</p>
-
-        {/* Challenges List */}
-        <div className="space-y-4">
-          {challengesState.challenges.map((challenge) => {
-            const progress = challengesState.progress.find(p => p.challengeId === challenge.id);
-            const current = progress?.current || 0;
-            const completed = progress?.completed || false;
-            const claimed = progress?.claimed || false;
-            const progressPercent = Math.min((current / challenge.target) * 100, 100);
-
+        <div className="vs-tabs" role="tablist">
+          {tabs.map(tb => (
+            <button key={tb.key} type="button" role="tab" aria-selected={period === tb.key} className={`vs-tab${period === tb.key ? ' is-active' : ''}`} onClick={() => setPeriod(tb.key)}>
+              {tb.icon}{tb.label}{claimableIn(tb.key) > 0 && <span className="vs-tab-dot">{claimableIn(tb.key)}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="vs-missions-meta">
+          <span>{done}/{ps.missions.length} {L(lang, 'completate', 'completed', 'completadas', 'terminées', '已完成')}</span>
+          <span><Clock size={14} />{L(lang, 'Rinnovo tra', 'Resets in', 'Se renueva en', 'Renouvellement dans', '刷新倒计时')} {fmtCountdown(msUntilReset(period), lang)}</span>
+        </div>
+        <div className="vs-mission-list">
+          {ps.missions.map(mi => {
+            const pr = ps.progress[mi.id]; const cur = pr?.current || 0; const complete = cur >= mi.target; const claimed = !!pr?.claimed;
             return (
-              <div
-                key={challenge.id}
-                className={`bg-black/40 rounded-xl p-4 border-2 transition-all ${
-                  completed
-                    ? claimed
-                      ? 'border-green-500/50'
-                      : 'border-yellow-500/50 animate-pulse'
-                    : 'border-gray-600/30'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  {/* Icon */}
-                  <div className="text-3xl flex-shrink-0">{challenge.icon}</div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-bold text-white mb-1">
-                      {t(lang, challenge.description)}
-                    </h3>
-
-                    {/* Progress Bar */}
-                    <div className="mb-2">
-                      <div className="flex justify-between text-xs text-gray-400 mb-1">
-                        <span>{current}/{challenge.target}</span>
-                        <span>{Math.floor(progressPercent)}%</span>
-                      </div>
-                      <div className="w-full bg-black/60 rounded-full h-2">
-                        <div
-                          className="h-2 rounded-full transition-all duration-500"
-                          style={{
-                            width: `${progressPercent}%`,
-                            backgroundColor: completed ? '#22c55e' : '#f59e0b'
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Rewards */}
-                    <div className="flex items-center gap-3 text-xs">
-                      <span className="text-yellow-400 font-bold">💰 {challenge.rewardCoins}</span>
-                      <span className="text-cyan-400 font-bold">💎 {challenge.rewardDiamonds}</span>
-                    </div>
-                  </div>
-
-                  {/* Action */}
-                  <div className="flex-shrink-0">
-                    {completed ? (
-                      claimed ? (
-                        <div className="px-3 py-1.5 rounded-lg bg-green-600/20 border-2 border-green-500/50 text-green-400 font-bold text-xs">
-                          ✓ {t(lang, 'daily_challenge_claimed')}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => handleClaim(challenge.id)}
-                          className="px-3 py-1.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition-all hover:scale-105"
-                        >
-                          🎁 {t(lang, 'daily_challenge_claim')}
-                        </button>
-                      )
-                    ) : (
-                      <div className="px-3 py-1.5 rounded-lg bg-gray-600/20 border-2 border-gray-500/50 text-gray-400 font-bold text-xs">
-                        🔒 {Math.floor(progressPercent)}%
-                      </div>
-                    )}
+              <div key={mi.id} className={`vs-mission${complete ? ' is-complete' : ''}${claimed ? ' is-claimed' : ''}`} style={{ ['--accent' as any]: COLORS[mi.kind] }}>
+                <span className="vs-mission-icon">{ICONS[mi.kind]}</span>
+                <div className="vs-mission-body">
+                  <b>{missionText(mi, lang)}</b>
+                  <span className="vs-progress"><span style={{ width: `${Math.min(100, (cur / mi.target) * 100)}%` }} /></span>
+                  <div className="vs-mission-foot">
+                    <span className="vs-muted">{missionValue(mi, cur)}</span>
+                    <span className="vs-mission-reward"><Coins size={13} />{mi.coins}<Gem size={13} />{mi.diamonds}</span>
                   </div>
                 </div>
+                {claimed ? <span className="vs-mission-state is-done"><Check size={18} /></span>
+                  : complete ? <button type="button" className="vs-btn vs-btn--sm vs-btn--accent" onClick={() => claim(mi.id)}><Gift size={15} />{L(lang, 'Riscuoti', 'Claim', 'Reclamar', 'Réclamer', '领取')}</button>
+                  : <span className="vs-mission-state">{Math.floor((cur / mi.target) * 100)}%</span>}
               </div>
             );
           })}

@@ -76,6 +76,8 @@ export interface Enemy extends Entity {
 
 export interface Projectile extends Entity {
   fromPlayer: boolean;
+  /** sparato da un'arma evoluta (piu' grande, alone dorato) */
+  evolved?: boolean;
   lifetime: number;
   maxLifetime: number;
   type: ProjectileType;
@@ -229,6 +231,7 @@ export interface Ability {
   description: string;
   color: string;
   rarity: number;
+  evolved?: boolean; // arma evoluta (livello massimo + passiva abbinata + scrigno)
 }
 
 export interface Fusion {
@@ -350,7 +353,12 @@ export interface GameState {
   bossSpawnCount?: number; // boss gia' comparsi (modalita' normale/endless)
   nextBossWave?: number; // ondata in cui arriva il prossimo boss
   victory?: boolean; // true se la partita e' finita con una vittoria
-  bossHazards?: unknown[]; // zone di pericolo degli attacchi dei boss (vedi bosses.ts)
+  bossHazards?: unknown[];
+  pickups?: Pickup[]; // cuori, magneti e scrigni a terra
+  chestsOpened?: number;
+  evolutionsDone?: number;
+  chestPending?: ChestReward[] | null; // scrigno aperto: la partita aspetta che il giocatore veda le ricompense
+  rerolls?: number; // "rigenera" disponibili nel level up // zone di pericolo degli attacchi dei boss (vedi bosses.ts)
   touchDir?: Vector2 | null; // direzione analogica da touch/joystick (lunghezza 0..1)
   
   // Statistiche per partita singola
@@ -359,4 +367,17 @@ export interface GameState {
   currentWave: number;
   currentScore: number;
   currentKills: number;
+}
+export interface Pickup {
+  id: string;
+  type: 'heart' | 'magnet' | 'chest';
+  pos: Vector2;
+  t: number;
+}
+
+export interface ChestReward {
+  kind: 'evolve' | 'upgrade' | 'coins' | 'heal';
+  abilityType?: AbilityType;
+  level?: number;
+  amount?: number;
 }

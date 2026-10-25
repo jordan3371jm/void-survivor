@@ -337,7 +337,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
         {filteredAchievements.length === 0 && (
           <div className="text-center py-8 sm:py-12 text-gray-400">
             <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🎯</div>
-            <p className="text-sm sm:text-lg">Nessun obiettivo trovato</p>
+            <p className="text-sm sm:text-lg">{({ it: 'Nessun obiettivo trovato', en: 'No achievements found', es: 'No se encontraron logros', fr: 'Aucun succès trouvé', zh: '未找到成就' } as Record<string, string>)[lang]}</p>
           </div>
         )}
       </div>

@@ -1,7 +1,9 @@
 import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, Ability, AbilityType, LevelUpChoice, Vector2, EnemyType, ShipType, DamageNumber, GameMode } from './types';
-import { playShoot, playPassiveSound } from './audio';
+import { playShoot, playPassiveSound, playHit } from './audio';
 import { getAbilityInfo } from './abilityInfo';
 import { updateBoss, updateBossHazards, clearBossHazards, drawBossHazards, drawBossAura } from './bosses';
+import { updatePickups, drawPickups, spawnPickup, rollEnemyDrop } from './progression';
+import { ensureProbe, updateProbes, drawProbes } from './probes';
 export { getAbilityInfo } from './abilityInfo';
 
 let idCounter = 0;
@@ -124,6 +126,16 @@ function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: Gam
   ctx.scale(pulse, pulse);
   if (enemy.isBoss) { ctx.shadowColor = enemy.color; ctx.shadowBlur = 25; }
   ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  // lampo bianco quando il nemico viene colpito
+  const ee = enemy as any;
+  if (ee.__lastHp !== undefined && enemy.hp < ee.__lastHp - 0.5) ee.__flash = 0.09;
+  ee.__lastHp = enemy.hp;
+  if (ee.__flash > 0) {
+    ee.__flash -= 1 / 60;
+    ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  }
   ctx.restore();
   return true;
 }
@@ -182,6 +194,8 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     case 'viper_ship': initialAbility = 'quantum_bounce'; break;
     case 'federation_ship': initialAbility = 'energy_shield'; break;
   }
+  // Boss Rush: il Buco Nero (danno a tutto lo schermo) renderebbe la modalita' troppo facile
+  if (gameMode === 'boss_rush' && initialAbility === 'stellar_blackhole') initialAbility = 'gravity_waves';
   const player: Player = {
     id: 'player', pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, radius: 15, hp: 100, maxHp: 100, damage: 10,
     exp: 0, level: 1, expToNext: 10, speed: 200, magnetRange: 80,
@@ -202,7 +216,7 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     reviveUsed: false, revivePending: false, abilityDamageStats: {},
     speedMultiplier: 1.0, speedBoostTimer: 0,
     currentPlayTime: 0, currentLevel: 1, currentWave: 1, currentScore: 0, currentKills: 0,
-    gameMode, bossRushIndex: 0, bossesDefeated: 0, victory: false
+    gameMode, bossRushIndex: 0, bossesDefeated: 0, victory: false, pickups: [], chestPending: null, rerolls: 2
   };
 }
 
@@ -344,7 +358,7 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     guardian: { radius: 40, hp: 50 * timeMultiplier, speed: 30, expValue: 15, color: '#ffcc00', pattern: 'shoot', shootTimer: 0, shootInterval: 1.5 },
     swarm: { radius: 8, hp: 3 * timeMultiplier, speed: 150, expValue: 1, color: '#88ff88', pattern: 'swarm' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 1800 * timeMultiplier, speed: 50, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_xenomorph: { radius: 70, hp: 1800 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
     boss_cthulhu: { radius: 90, hp: 2200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
     boss_borg_cube: { radius: 85, hp: 2500 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
     boss_space_kraken: { radius: 95, hp: 2400 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
@@ -379,6 +393,7 @@ function spawnDamageNumber(state: GameState, pos: Vector2, damage: number, color
   if (abilityType && damage > 0) {
     state.abilityDamageStats[abilityType] = (state.abilityDamageStats[abilityType] || 0) + damage;
   }
+  if (abilityType && damage > 0) playHit(abilityType);
   if (damage < 2 && !isCrit) {
     const acc = continuousDamage.get(pos) || { value: 0, shownAt: -1 };
     acc.value += damage;
@@ -493,6 +508,7 @@ function processAbilities(state: GameState, dt: number): void {
     const lvl = ability.level;
     const attackBonus = player.abilityAttackBonuses[ability.type] || 0;
     const dmg = (ability.damage + attackBonus) * (1 + (player.damage - 10) * 0.05) * player.weaponPower;
+    const projBefore = state.projectiles.length;
     switch (ability.type) {
       case 'photon_gun': {
         const projectileCount = 4 * (1 + player.projectileCountBonus);
@@ -596,14 +612,14 @@ function processAbilities(state: GameState, dt: number): void {
         playShoot('antimatter_bomb'); break;
       }
       case 'neutronium_boomerang': { if (!nearest) break; const a = angle(player.pos, nearest.pos); const boomerangSpeed = 500 * (1 + player.projectileSpeedBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a) * boomerangSpeed, y: Math.sin(a) * boomerangSpeed }, radius: 10 * (1 + player.areaBonus), hp: 1, maxHp: 1, damage: dmg * 1.5, fromPlayer: true, lifetime: 3, maxLifetime: 3, type: 'boomerang_proj', piercing: 100, color: ability.color, trail: [] }); player.shootFlash = 1; playShoot('neutronium_boomerang'); break; }
-      case 'probe_x': { const baseDistance = 80; const baseMoveSpeed = 50 * (1 + player.moveSpeedBonus); const baseRotationSpeed = 1.5 * (1 + player.projectileSpeedBonus); const baseDuration = 4 * (1 + player.durationBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); const existingProbe = state.orbitingProbes.find(p => p.type === 'probe_x'); if (!existingProbe) { state.orbitingProbes.push({ id: genId(), type: 'probe_x', pos: { x: player.pos.x, y: player.pos.y }, angle: 0, distance: baseDistance, damage: dmg, color: '#ff0000', shootTimer: 0, shootInterval: 0.25 * (1 - player.cooldownReduction), bombardmentZone: { angle: 0, radius: baseDistance + 50, active: true, duration: 0, maxDuration: baseDuration, groupCount: 4, currentGroup: 0, groupTimer: 0, groupInterval: baseDuration / 4 }, moveSpeed: baseMoveSpeed, rotationSpeed: -baseRotationSpeed }); } else { existingProbe.damage = dmg; existingProbe.shootInterval = 0.25 * (1 - player.cooldownReduction); existingProbe.moveSpeed = baseMoveSpeed; existingProbe.rotationSpeed = -baseRotationSpeed; existingProbe.bombardmentZone.active = true; existingProbe.bombardmentZone.duration = 0; existingProbe.bombardmentZone.maxDuration = baseDuration; existingProbe.bombardmentZone.currentGroup = 0; existingProbe.bombardmentZone.groupTimer = 0; } playShoot('probe_x'); break; }
-      case 'probe_y': { const baseDistance = 80; const baseMoveSpeed = 50 * (1 + player.moveSpeedBonus); const baseRotationSpeed = 1.5 * (1 + player.projectileSpeedBonus); const baseDuration = 4 * (1 + player.durationBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); const existingProbe = state.orbitingProbes.find(p => p.type === 'probe_y'); if (!existingProbe) { state.orbitingProbes.push({ id: genId(), type: 'probe_y', pos: { x: player.pos.x, y: player.pos.y }, angle: Math.PI, distance: baseDistance, damage: dmg, color: '#0000ff', shootTimer: 0, shootInterval: 0.25 * (1 - player.cooldownReduction), bombardmentZone: { angle: Math.PI, radius: baseDistance + 50, active: true, duration: 0, maxDuration: baseDuration, groupCount: 4, currentGroup: 0, groupTimer: 0, groupInterval: baseDuration / 4 }, moveSpeed: baseMoveSpeed, rotationSpeed: baseRotationSpeed }); } else { existingProbe.damage = dmg; existingProbe.shootInterval = 0.25 * (1 - player.cooldownReduction); existingProbe.moveSpeed = baseMoveSpeed; existingProbe.rotationSpeed = baseRotationSpeed; existingProbe.bombardmentZone.active = true; existingProbe.bombardmentZone.duration = 0; existingProbe.bombardmentZone.maxDuration = baseDuration; existingProbe.bombardmentZone.currentGroup = 0; existingProbe.bombardmentZone.groupTimer = 0; } playShoot('probe_y'); break; }
+      case 'probe_x': case 'probe_y': { ensureProbe(state, ability.type, dmg, lvl); ability.timer = 0.5; break; }
     }
+    if (ability.evolved) for (let k = projBefore; k < state.projectiles.length; k++) { const pr = state.projectiles[k]; pr.evolved = true; pr.radius *= 1.3; pr.color = ability.color; }
   }
 }
 
 export function updateGame(state: GameState, dt: number): void {
-  if (state.gameOver || state.paused || state.levelUpPending) return;
+  if (state.gameOver || state.paused || state.levelUpPending || state.chestPending) return;
   // Il timer del gioco accumula il tempo REALE (non influenzato dal speed multiplier)
   state.time += dt;
   // Applica speed multiplier per il gameplay
@@ -662,7 +678,8 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.gameMode !== 'boss_rush') {
     // Maledizione: piu' frequenza (spawnRate) e piu' quantita' (nemici per ogni spawn)
     const curseSpawn = 1 + Math.max(0, state.player.curseLevel) / 100;
-    const spawnRate = Math.min(1 + state.time / 20, 8) * curseSpawn;
+    // Durante un boss arrivano il 70% di nemici in meno: lo scontro col boss resta al centro della scena
+    const spawnRate = Math.min(1 + state.time / 20, 8) * curseSpawn * (state.bossActive ? 0.3 : 1);
     if (Math.random() < spawnRate * gameDt) {
       const wave1: EnemyType[] = ['asteroid_small', 'swarm', 'drone_sentinel', 'cosmic_leech', 'star_beetle'];
       const wave2: EnemyType[] = ['asteroid_small', 'asteroid_medium', 'drone_sentinel', 'star_raider', 'void_crawler', 'star_fish'];
@@ -696,27 +713,7 @@ export function updateGame(state: GameState, dt: number): void {
   if (player.regenPerSecond > 0 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + player.regenPerSecond * gameDt);
   state.camera.x = player.pos.x; state.camera.y = player.pos.y;
   processAbilities(state, gameDt);
-  for (const probe of state.orbitingProbes) {
-    probe.angle += probe.rotationSpeed * gameDt;
-    if (probe.bombardmentZone.active) {
-      probe.bombardmentZone.duration += gameDt; probe.bombardmentZone.angle += probe.rotationSpeed * gameDt; probe.bombardmentZone.groupTimer += gameDt;
-      if (probe.bombardmentZone.groupTimer >= probe.bombardmentZone.groupInterval && probe.bombardmentZone.currentGroup < probe.bombardmentZone.groupCount) {
-        const ability = player.abilities.find(a => a.type === probe.type);
-        if (ability) {
-          const attackBonus = player.abilityAttackBonuses[probe.type] || 0;
-          const probeDmg = (ability.damage + attackBonus) * (1 + (player.damage - 10) * 0.05) * player.weaponPower;
-          const zoneX = player.pos.x + Math.cos(probe.bombardmentZone.angle) * probe.bombardmentZone.radius;
-          const zoneY = player.pos.y + Math.sin(probe.bombardmentZone.angle) * probe.bombardmentZone.radius;
-          for (let i = 0; i < Math.floor(4 * (1 + player.projectileCountBonus)); i++) {
-            const projAngle = probe.bombardmentZone.angle + (Math.random() - 0.5) * 0.5;
-            state.projectiles.push({ id: genId(), pos: { x: zoneX, y: zoneY }, vel: { x: Math.cos(projAngle) * 400, y: Math.sin(projAngle) * 400 }, radius: 5, hp: 1, maxHp: 1, damage: probeDmg, fromPlayer: true, lifetime: 2, maxLifetime: 2, type: probe.type === 'probe_x' ? 'probe_laser_red' : 'probe_laser_blue', aoeRadius: 30 * (1 + player.areaBonus), color: probe.color, trail: [], homing: true });
-          }
-        }
-        probe.bombardmentZone.currentGroup++; probe.bombardmentZone.groupTimer = 0; playShoot(probe.type);
-      }
-      if (probe.bombardmentZone.duration >= probe.bombardmentZone.maxDuration) { probe.bombardmentZone.duration = 0; probe.bombardmentZone.currentGroup = 0; probe.bombardmentZone.groupTimer = 0; }
-    }
-  }
+  updateProbes(state, gameDt);
   for (const enemy of state.enemies) {
     if (enemy.freezeTimer && enemy.freezeTimer > 0) { enemy.freezeTimer -= gameDt; if (enemy.freezeTimer <= 0) { enemy.freezeTimer = 0; enemy.speed = enemy.baseSpeed || enemy.speed; } }
     if (enemy.slowTimer && enemy.slowTimer > 0) { enemy.slowTimer -= gameDt; if (enemy.slowTimer <= 0) { enemy.slowTimer = 0; if (!(enemy.freezeTimer && enemy.freezeTimer > 0) && enemy.baseSpeed) enemy.speed = enemy.baseSpeed; } }
@@ -826,6 +823,7 @@ export function updateGame(state: GameState, dt: number): void {
       if (tip) { enemy.hp -= tip.sword.damage * gameDt; spawnDamageNumber(state, enemy.pos, tip.sword.damage * gameDt, tip.sword.color, false, 'laser_swords'); spawnParticles(state, enemy.pos, tip.sword.color, 1); }
     }
   }
+  updatePickups(state, gameDt, upgradeAbility, () => applyPassiveAbilities(player), playShoot);
   if (player.exp >= player.expToNext && !state.levelUpPending) {
     if (player.level < 100) { 
       player.exp -= player.expToNext; 
@@ -849,6 +847,9 @@ export function updateGame(state: GameState, dt: number): void {
         state.bossActive = false; 
         state.bossesDefeated = (state.bossesDefeated || 0) + 1;
         clearBossHazards(state, e.id);
+        // ricompense del boss: scrigno del tesoro, un cuore e un "rigenera" in piu'
+        if (!state.gameOver) { spawnPickup(state, e.pos, 'chest'); spawnPickup(state, { x: e.pos.x + 60, y: e.pos.y }, 'heart'); }
+        state.rerolls = (state.rerolls || 0) + 1;
         state.screenShake = 0.8; 
         spawnParticles(state, e.pos, '#ffff00', 20); 
         
@@ -884,6 +885,7 @@ export function updateGame(state: GameState, dt: number): void {
         for (let i = 0; i < 5; i++) spawnExpOrb(state, { x: e.pos.x + (Math.random() - 0.5) * 100, y: e.pos.y + (Math.random() - 0.5) * 100 }, 20); 
       }
       else if (e.type === 'guardian' && Math.random() < 0.3) state.diamondsEarned += 1;
+      if (!e.isBoss) rollEnemyDrop(state, e.pos);
       return false;
     }
     return true;
@@ -961,6 +963,7 @@ export function updateGame(state: GameState, dt: number): void {
 function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
   const activeTypes: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'probe_x', 'probe_y'];
   const passiveTypes: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
+  if (state.gameMode === 'boss_rush') activeTypes.splice(activeTypes.indexOf('stellar_blackhole'), 1); // troppo forte contro i boss
   const ownedAbilities = state.player.abilities;
   const activeAbilities = ownedAbilities.filter(a => !a.type.startsWith('passive_'));
   const passiveAbilities = ownedAbilities.filter(a => a.type.startsWith('passive_'));
@@ -990,6 +993,14 @@ function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   while (pool.length < 3) pool.push({ type: 'stat', stat: 'damage', name: 'gold_reward', description: 'gold_reward_desc', icon: '💰', color: '#ffd700' });
   return pool.slice(0, 3);
+}
+
+/** "Rigenera": nuove scelte di level up (consuma un utilizzo). */
+export function rerollLevelUp(state: GameState): boolean {
+  if (!state.levelUpPending || (state.rerolls || 0) <= 0) return false;
+  state.rerolls = (state.rerolls || 0) - 1;
+  state.levelUpChoices = generateLevelUpChoices(state);
+  return true;
 }
 
 export function applyLevelUpChoice(state: GameState, choice: LevelUpChoice): void {
@@ -1047,6 +1058,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath(); ctx.moveTo(orb.pos.x, orb.pos.y - r * 0.8); ctx.lineTo(orb.pos.x + r * 0.35, orb.pos.y - r * 0.1); ctx.lineTo(orb.pos.x - r * 0.35, orb.pos.y - r * 0.1); ctx.closePath(); ctx.fill();
   }
+  drawPickups(ctx, state);
   for (const drone of state.drones) { ctx.fillStyle = drone.color; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius * 0.4, 0, Math.PI * 2); ctx.fill(); }
   for (const wave of state.gravityWaves) { const alpha = 1 - (wave.lifetime / wave.maxLifetime); ctx.strokeStyle = wave.color; ctx.lineWidth = 2; ctx.globalAlpha = alpha * 0.5; ctx.beginPath(); ctx.arc(wave.pos.x, wave.pos.y, wave.radius, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
   drawBossHazards(ctx, state, 'ground');
@@ -1221,7 +1233,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     ctx.fillStyle = proj.color; ctx.fill();
   }
   ctx.restore();
-  for (const proj of state.projectiles) { ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
+  for (const proj of state.projectiles) { ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { if (proj.evolved) { const pulse = 1.6 + Math.sin(state.time * 12 + proj.pos.x * 0.05) * 0.25; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, proj.radius * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
   for (const p of state.particles) { const alpha = p.life / p.maxLife; ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.size * alpha, 0, Math.PI * 2); ctx.fill(); }
   if (showDamageNumbers) { for (const dmgNum of state.damageNumbers) { const alpha = dmgNum.lifetime / dmgNum.maxLifetime; const fontSize = dmgNum.isCrit ? 18 : 12; ctx.save(); ctx.globalAlpha = alpha; ctx.font = `bold ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.fillStyle = dmgNum.isCrit ? '#ffff00' : dmgNum.color; ctx.fillText(Math.floor(dmgNum.value).toString(), dmgNum.pos.x, dmgNum.pos.y); if (dmgNum.isCrit) { ctx.font = 'bold 9px monospace'; ctx.fillText('CRIT!', dmgNum.pos.x, dmgNum.pos.y - 12); } ctx.restore(); } }
   for (const nebula of state.nebulaPools) { const alpha = 1 - (nebula.lifetime / nebula.maxLifetime); ctx.save(); ctx.globalAlpha = alpha * 0.5; const gradient = ctx.createRadialGradient(nebula.pos.x, nebula.pos.y, 0, nebula.pos.x, nebula.pos.y, nebula.radius); gradient.addColorStop(0, nebula.color + 'cc'); gradient.addColorStop(0.4, nebula.color + '88'); gradient.addColorStop(0.7, nebula.color + '44'); gradient.addColorStop(1, nebula.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = alpha * 0.3; ctx.strokeStyle = nebula.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius * (0.8 + Math.sin(state.time * 5) * 0.1), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 4; i++) { const angle = (i / 4) * Math.PI * 2 + state.time * 2; const dist = nebula.radius * 0.5; const px = nebula.pos.x + Math.cos(angle) * dist; const py = nebula.pos.y + Math.sin(angle) * dist; ctx.fillStyle = nebula.color; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
@@ -1229,7 +1241,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   for (const sword of state.laserSwords) { const sx = player.pos.x + Math.cos(sword.angle) * sword.distance; const sy = player.pos.y + Math.sin(sword.angle) * sword.distance; const ex = sx + Math.cos(sword.angle + Math.PI / 2) * sword.length; const ey = sy + Math.sin(sword.angle + Math.PI / 2) * sword.length; ctx.strokeStyle = sword.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); }
   const orbitingSatellitesAbility = player.abilities.find(a => a.type === 'orbiting_satellites');
   if (orbitingSatellitesAbility) { const satLvl = orbitingSatellitesAbility.level; const satCount = getSatelliteCount(player, satLvl); const rotationSpeed = 2 * (1 + player.projectileSpeedBonus); const satDistance = Math.min((70 + satLvl * 10) * (1 + player.areaBonus), 200); const satRadius = 15 * (1 + player.areaBonus); for (let i = 0; i < satCount; i++) { const ang = (state.time * rotationSpeed) + (i * Math.PI * 2 / satCount); const satX = player.pos.x + Math.cos(ang) * satDistance; const satY = player.pos.y + Math.sin(ang) * satDistance; ctx.save(); ctx.translate(satX, satY); ctx.rotate(ang + Math.PI / 2); ctx.fillStyle = orbitingSatellitesAbility.color; ctx.beginPath(); ctx.arc(0, 0, satRadius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, satRadius * 0.4, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } }
-  for (const probe of state.orbitingProbes) { const probeX = player.pos.x + Math.cos(probe.angle) * probe.distance; const probeY = player.pos.y + Math.sin(probe.angle) * probe.distance; if (probe.bombardmentZone.active) { const zoneX = player.pos.x + Math.cos(probe.bombardmentZone.angle) * probe.bombardmentZone.radius; const zoneY = player.pos.y + Math.sin(probe.bombardmentZone.angle) * probe.bombardmentZone.radius; ctx.save(); ctx.globalAlpha = 0.4; ctx.fillStyle = probe.color; ctx.beginPath(); ctx.arc(zoneX, zoneY, 20, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } ctx.save(); ctx.translate(probeX, probeY); ctx.rotate(probe.angle + Math.PI / 2); ctx.fillStyle = probe.color; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  drawProbes(ctx, state);
   const gravityFieldAbility = player.abilities.find(a => a.type === 'gravity_field');
   if (gravityFieldAbility) { const fieldLvl = gravityFieldAbility.level; const fieldRadius = (150 + fieldLvl * 20) * (1 + player.areaBonus); const pulse = Math.sin(state.time * 3) * 0.1 + 0.9; ctx.save(); ctx.globalAlpha = 0.25 * pulse; const gradient = ctx.createRadialGradient(player.pos.x, player.pos.y, 0, player.pos.x, player.pos.y, fieldRadius); gradient.addColorStop(0, gravityFieldAbility.color + '00'); gradient.addColorStop(0.5, gravityFieldAbility.color + '33'); gradient.addColorStop(0.8, gravityFieldAbility.color + '66'); gradient.addColorStop(1, gravityFieldAbility.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 0.5 * pulse; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 2; ctx.setLineDash([5, 10]); ctx.lineDashOffset = -state.time * 20; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius * 0.9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.3; for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2 + state.time * 0.5; const innerRadius = fieldRadius * 0.3; const outerRadius = fieldRadius * 0.85; const x1 = player.pos.x + Math.cos(ang) * innerRadius; const y1 = player.pos.y + Math.sin(ang) * innerRadius; const x2 = player.pos.x + Math.cos(ang) * outerRadius; const y2 = player.pos.y + Math.sin(ang) * outerRadius; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } ctx.restore(); }
   drawBossHazards(ctx, state, 'top');
@@ -1605,6 +1617,27 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     }
   }
 
+  // --- Freccia verso il boss quando e' fuori dallo schermo ---
+  const bossOff = state.enemies.find(e => e.isBoss);
+  if (bossOff) {
+    const z = getWorldZoom(width);
+    const sx = (bossOff.pos.x - state.camera.x) * z + width / 2, sy = (bossOff.pos.y - state.camera.y) * z + height / 2;
+    const pad = 74 * s;
+    if (sx < 0 || sx > width || sy < 0 || sy > height) {
+      const a = Math.atan2(sy - height / 2, sx - width / 2);
+      const hx = width / 2 - pad, hy = height / 2 - pad;
+      const k = Math.min(hx / Math.max(1e-6, Math.abs(Math.cos(a))), hy / Math.max(1e-6, Math.abs(Math.sin(a))));
+      const ax = width / 2 + Math.cos(a) * k, ay = height / 2 + Math.sin(a) * k;
+      const pulse = 1 + Math.sin(state.time * 6) * 0.12;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse, pulse);
+      ctx.fillStyle = 'rgba(255, 45, 85, 0.9)'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(18 * s, 0); ctx.lineTo(-10 * s, -13 * s); ctx.lineTo(-4 * s, 0); ctx.lineTo(-10 * s, 13 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      const icon = state.currentBossType ? getBossIcon(state.currentBossType) : null;
+      if (icon) { const isz = 30 * s; ctx.drawImage(icon, ax - Math.cos(a) * 30 * s - isz / 2, ay - Math.sin(a) * 30 * s - isz / 2, isz, isz); }
+    }
+  }
+
   // --- Abilita' (in basso al centro) ---
   const activeAbilities = player.abilities.filter(a => !a.type.startsWith('passive_'));
   const passiveAbilities = player.abilities.filter(a => a.type.startsWith('passive_'));
@@ -1614,15 +1647,15 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     let x = (width - total) / 2;
     for (const ability of list) {
       hudRoundRect(ctx, x, y, size, size, size * 0.26);
-      ctx.fillStyle = 'rgba(8, 10, 26, 0.8)'; ctx.fill();
-      ctx.strokeStyle = ability.color; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = ability.evolved ? 'rgba(60, 40, 5, 0.85)' : 'rgba(8, 10, 26, 0.8)'; ctx.fill();
+      ctx.strokeStyle = ability.evolved ? '#fbbf24' : ability.color; ctx.lineWidth = ability.evolved ? 3 : 2; ctx.stroke();
       const pad = size * 0.1;
       drawAbilityIcon(ctx, ability.type, ability.color, x + pad, y + pad, size - pad * 2);
       // livello
-      const lvl = String(ability.level);
+      const lvl = ability.evolved ? 'EVO' : String(ability.level);
       const lw = Math.max(13 * s, 7 * s + lvl.length * 6 * s), lh = 12 * s;
       hudRoundRect(ctx, x + size - lw + 3 * s, y + size - lh + 3 * s, lw, lh, lh / 2);
-      ctx.fillStyle = ability.level >= ability.maxLevel ? '#f59e0b' : '#111427'; ctx.fill();
+      ctx.fillStyle = ability.evolved ? '#fbbf24' : ability.level >= ability.maxLevel ? '#f59e0b' : '#111427'; ctx.fill();
       ctx.strokeStyle = ability.color; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = '#ffffff'; ctx.font = `800 ${8 * s}px ${HUD_FONT}`; ctx.textAlign = 'center';
       ctx.fillText(lvl, x + size - lw / 2 + 3 * s, y + size - lh / 2 + 3.5 * s);
@@ -1712,4 +1745,4 @@ function getBossNameFR(key: string): string { const names: Record<string, string
 function getBossNameZH(key: string): string { const names: Record<string, string> = { 'boss_death_star': '死星', 'boss_xenomorph': '异形女王', 'boss_cthulhu': '宇宙克苏鲁', 'boss_borg_cube': '博格立方体', 'boss_space_kraken': '太空克拉肯', 'boss_galaxy_devourer': '银河吞噬者', 'boss_void_emperor': '虚空皇帝', 'boss_cosmic_horror': '宇宙恐怖' }; return names[key] || 'BOSS'; }
 
 // Aiuti usati dal modulo dei boss
-export { genId as newId, spawnParticles, shieldPulse };
+export { genId as newId, spawnParticles, shieldPulse, spawnDamageNumber };
