@@ -23,6 +23,8 @@ export interface BossHazard {
   followBoss?: string;
   radius: number;
   ringSpeed: number; gapAngle: number; gapSize: number; maxRadius: number;
+  /** numero di varchi dell'anello, alla stessa distanza tra loro */
+  gapCount: number;
   pull: number;
   telegraph: number; active: number; t: number;
   damage: number; continuous: boolean; hit: boolean; harmless: boolean;
@@ -61,7 +63,7 @@ function hazards(state: GameState): BossHazard[] {
 function addHazard(state: GameState, h: Partial<BossHazard> & Pick<BossHazard, 'kind' | 'style' | 'color' | 'x' | 'y' | 'telegraph' | 'active' | 'damage'>): BossHazard {
   const full: BossHazard = {
     id: newId(), angle: 0, length: 0, width: 0, sweep: 0, trackTelegraph: false, trackActive: 0,
-    radius: 0, ringSpeed: 0, gapAngle: 0, gapSize: 0, maxRadius: 1600, pull: 0, t: 0,
+    radius: 0, ringSpeed: 0, gapAngle: 0, gapSize: 0, gapCount: 1, maxRadius: 1600, pull: 0, t: 0,
     continuous: false, hit: false, harmless: false, ...h,
   };
   hazards(state).push(full);
@@ -136,10 +138,10 @@ function lineStrike(c: MoveCtx, cx: number, cy: number, a: number, length: numbe
   });
 }
 
-function shockRing(c: MoveCtx, speed: number, width: number, gapSize: number, color: string, style: HazardStyle, gapAngle = Math.random() * TAU) {
+function shockRing(c: MoveCtx, speed: number, width: number, gapSize: number, color: string, style: HazardStyle, gapAngle = Math.random() * TAU, gapCount = 1) {
   return addHazard(c.state, {
     kind: 'ring', style, color, x: c.boss.pos.x, y: c.boss.pos.y, radius: c.boss.radius * 0.6,
-    ringSpeed: speed * c.speedMul, width, gapAngle, gapSize, maxRadius: 1300,
+    ringSpeed: speed * c.speedMul, width, gapAngle, gapSize, gapCount, maxRadius: 1300,
     telegraph: 0.35, active: 6, damage: c.dmg,
   });
 }
@@ -215,31 +217,41 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
   // REGINA XENOMORFA: acido, balzi, uova/parassiti, coda, urlo
   boss_xenomorph: [
     { id: 'acid', weight: 3, run: c => {
-      const n = c.enraged ? 5 : 3;
-      for (let i = 0; i < n; i++) c.at(i * 0.22, () => {
+      const n = c.enraged ? 7 : 4;
+      for (let i = 0; i < n; i++) c.at(i * 0.2, () => {
         const p = predicted(c.state, 0.7 + i * 0.1);
-        strikeZone(c, p.x + rnd(-60, 60), p.y + rnd(-60, 60), 72, 0.85, 'acid', '#8cff3a', { linger: 3.2, dps: c.dmg * 0.9 });
+        strikeZone(c, p.x + rnd(-70, 70), p.y + rnd(-70, 70), 78, 0.8, 'acid', '#8cff3a', { linger: 3.6, dps: c.dmg * 1.1 });
         playShoot('acid');
       });
-      return n * 0.22 + 0.9;
+      return n * 0.2 + 0.9;
     } },
     { id: 'pounce', weight: 3, run: c => {
-      dashAt(c, 0.75);
-      if (c.enraged) c.at(1.6 * c.tele, () => dashAt(c, 0.5, 950));
-      return c.enraged ? 2.8 : 1.6;
+      // balzi a catena: 2 (3 nella seconda fase), ognuno mirato dove si trova il giocatore
+      const jumps = c.enraged ? 3 : 2;
+      dashAt(c, 0.7, 900);
+      for (let k = 1; k < jumps; k++) c.at(k * 1.25 * c.tele, () => dashAt(c, 0.5, 1000));
+      return jumps * 1.25 + 0.4;
     } },
-    { id: 'brood', weight: 1.5, run: c => { summon(c.state, c.boss, 'parasite', 4 + c.tier); playShoot('boss_roar'); return 0.8; } },
+    { id: 'acid_spray', weight: 2.5, run: c => {
+      const volleys = c.enraged ? 4 : 3;
+      for (let v = 0; v < volleys; v++) c.at(v * 0.32, () => {
+        const a = c.aim(); const n = 7 + Math.floor(c.tier / 2);
+        for (let i = 0; i < n; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + (i - (n - 1) / 2) * 0.16 + (v % 2) * 0.08, 300 * c.speedMul, c.dmg * 0.55, '#8cff3a', 8);
+        playShoot('acid');
+      });
+      return volleys * 0.32 + 0.4;
+    } },
+    { id: 'brood', weight: 1.5, run: c => { summon(c.state, c.boss, 'parasite', 6 + c.tier); playShoot('boss_roar'); return 0.8; } },
     { id: 'tail', weight: 2, run: c => {
       c.ai.anchor = 1.0 * c.tele;
-      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 150, 0.9, 'tail', '#c8ff9a', { burst: c.dmg * 1.3 });
-      c.at(0.9 * c.tele, () => playShoot('boss_slam'));
+      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 170, 0.85, 'tail', '#c8ff9a', { burst: c.dmg * 1.5 });
+      c.at(0.85 * c.tele, () => playShoot('boss_slam'));
       return 1.3;
     } },
     { id: 'screech', weight: 2, phase2Only: true, run: c => {
       playShoot('boss_roar');
-      shockRing(c, 360, 26, 0.9, '#b6ff6a', 'screech');
-      c.at(0.55, () => shockRing(c, 360, 26, 0.9, '#b6ff6a', 'screech'));
-      return 1.4;
+      for (let k = 0; k < 3; k++) c.at(k * 0.5, () => shockRing(c, 370, 26, 0.9, '#b6ff6a', 'screech'));
+      return 1.8;
     } },
   ],
 
@@ -255,9 +267,12 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       return n * 0.16 + 1.1;
     } },
     { id: 'madness', weight: 2.5, run: c => {
+      // 3 varchi uguali e alla stessa distanza (120 gradi); ogni anello successivo ruota di poco,
+      // cosi' basta spostarsi un po' per passare dal varco di un anello a quello del successivo
       const n = c.enraged ? 4 : 3;
-      for (let i = 0; i < n; i++) c.at(i * 0.65, () => { shockRing(c, 250, 24, 1.0, '#41f2a6', 'eldritch'); playShoot('gravity_waves'); });
-      return n * 0.65 + 0.6;
+      const base = Math.random() * TAU; const turn = Math.random() < 0.5 ? 0.45 : -0.45;
+      for (let i = 0; i < n; i++) c.at(i * 0.75, () => { shockRing(c, 240, 24, 0.75, '#41f2a6', 'eldritch', base + i * turn, 3); playShoot('gravity_waves'); });
+      return n * 0.75 + 0.6;
     } },
     { id: 'eyes', weight: 2, run: c => {
       for (let i = 0; i < 5; i++) c.at(i * 0.35, () => { strikeZone(c, c.state.player.pos.x, c.state.player.pos.y, 85, 0.8, 'eye', '#ffe66b', { burst: c.dmg }); });
@@ -548,8 +563,12 @@ export function updateBossHazards(state: GameState, dt: number): void {
       const dd = dist(p.pos, { x: h.x, y: h.y });
       if (!h.hit && Math.abs(dd - h.radius) < h.width / 2 + p.radius * 0.6) {
         const a = ang({ x: h.x, y: h.y }, p.pos);
-        const off = Math.abs(Math.atan2(Math.sin(a - h.gapAngle), Math.cos(a - h.gapAngle)));
-        if (off > h.gapSize / 2) { h.hit = true; hurtPlayer(state, h.damage, false); }
+        let inGap = false;
+        for (let g = 0; g < h.gapCount; g++) {
+          const ga = h.gapAngle + (g * TAU) / h.gapCount;
+          if (Math.abs(Math.atan2(Math.sin(a - ga), Math.cos(a - ga))) <= h.gapSize / 2) { inGap = true; break; }
+        }
+        if (!inGap) { h.hit = true; hurtPlayer(state, h.damage, false); }
       }
     } else if (h.kind === 'well') {
       const dd = dist(p.pos, { x: h.x, y: h.y });
@@ -664,10 +683,17 @@ function drawRing(ctx: CanvasRenderingContext2D, h: BossHazard) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.strokeStyle = h.color; ctx.lineCap = 'round';
-  const a0 = h.gapAngle + h.gapSize / 2, a1 = h.gapAngle - h.gapSize / 2 + TAU;
-  ctx.globalAlpha = 0.25; ctx.lineWidth = h.width * 2.2; ctx.beginPath(); ctx.arc(h.x, h.y, h.radius, a0, a1); ctx.stroke();
-  ctx.globalAlpha = 0.9; ctx.lineWidth = h.width; ctx.beginPath(); ctx.arc(h.x, h.y, h.radius, a0, a1); ctx.stroke();
-  ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.7; ctx.lineWidth = h.width * 0.3; ctx.beginPath(); ctx.arc(h.x, h.y, h.radius, a0, a1); ctx.stroke();
+  const step = TAU / h.gapCount;
+  const arcs = (lw: number) => {
+    ctx.lineWidth = lw;
+    for (let g = 0; g < h.gapCount; g++) {
+      const a0 = h.gapAngle + g * step + h.gapSize / 2, a1 = h.gapAngle + (g + 1) * step - h.gapSize / 2;
+      ctx.beginPath(); ctx.arc(h.x, h.y, h.radius, a0, a1); ctx.stroke();
+    }
+  };
+  ctx.globalAlpha = 0.25; arcs(h.width * 2.2);
+  ctx.globalAlpha = 0.9; arcs(h.width);
+  ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = 0.7; arcs(h.width * 0.3);
   ctx.restore();
 }
 

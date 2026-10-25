@@ -182,6 +182,8 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     case 'viper_ship': initialAbility = 'quantum_bounce'; break;
     case 'federation_ship': initialAbility = 'energy_shield'; break;
   }
+  // Boss Rush: il Buco Nero (danno a tutto lo schermo) renderebbe la modalita' troppo facile
+  if (gameMode === 'boss_rush' && initialAbility === 'stellar_blackhole') initialAbility = 'gravity_waves';
   const player: Player = {
     id: 'player', pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, radius: 15, hp: 100, maxHp: 100, damage: 10,
     exp: 0, level: 1, expToNext: 10, speed: 200, magnetRange: 80,
@@ -344,7 +346,7 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     guardian: { radius: 40, hp: 50 * timeMultiplier, speed: 30, expValue: 15, color: '#ffcc00', pattern: 'shoot', shootTimer: 0, shootInterval: 1.5 },
     swarm: { radius: 8, hp: 3 * timeMultiplier, speed: 150, expValue: 1, color: '#88ff88', pattern: 'swarm' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 1800 * timeMultiplier, speed: 50, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_xenomorph: { radius: 70, hp: 2700 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
     boss_cthulhu: { radius: 90, hp: 2200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
     boss_borg_cube: { radius: 85, hp: 2500 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
     boss_space_kraken: { radius: 95, hp: 2400 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
@@ -962,6 +964,7 @@ export function updateGame(state: GameState, dt: number): void {
 function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
   const activeTypes: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'probe_x', 'probe_y'];
   const passiveTypes: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
+  if (state.gameMode === 'boss_rush') activeTypes.splice(activeTypes.indexOf('stellar_blackhole'), 1); // troppo forte contro i boss
   const ownedAbilities = state.player.abilities;
   const activeAbilities = ownedAbilities.filter(a => !a.type.startsWith('passive_'));
   const passiveAbilities = ownedAbilities.filter(a => a.type.startsWith('passive_'));

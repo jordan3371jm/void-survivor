@@ -495,17 +495,20 @@ export default function App() {
       finalizeRun(); // sicurezza: la partita precedente viene sempre accreditata una sola volta
       const s = storeRef.current;
       const newState = engine.createInitialState(s.currentShip as any, mode);
-      newState.player.maxHp = s.stats.maxHp || 100;
-      newState.player.hp = s.stats.maxHp || 100;
-      newState.player.damage = s.stats.attack || 10;
-      newState.player.speed = s.stats.shipSpeed || 200;
-      newState.player.armor = s.stats.defense || 0;
-      newState.player.regenPerSecond = s.stats.regeneration || 0;
-      newState.player.luckBonus = (s.stats.luck || 0) / 100;
-      newState.player.expBonus = (s.stats.expBonus || 0) / 100;
-      newState.player.critChance = s.stats.critChance || 0;
-      newState.player.critDamage = s.stats.critDamage || 150;
-      newState.player.abilityAttackBonuses = { ...s.abilityAttackLevels };
+      // Potenziamenti del negozio: non valgono nella Boss Rush (senza nemici normali la renderebbero troppo facile)
+      if (mode !== 'boss_rush') {
+        newState.player.maxHp = s.stats.maxHp || 100;
+        newState.player.hp = s.stats.maxHp || 100;
+        newState.player.damage = s.stats.attack || 10;
+        newState.player.speed = s.stats.shipSpeed || 200;
+        newState.player.armor = s.stats.defense || 0;
+        newState.player.regenPerSecond = s.stats.regeneration || 0;
+        newState.player.luckBonus = (s.stats.luck || 0) / 100;
+        newState.player.expBonus = (s.stats.expBonus || 0) / 100;
+        newState.player.critChance = s.stats.critChance || 0;
+        newState.player.critDamage = s.stats.critDamage || 150;
+        newState.player.abilityAttackBonuses = { ...s.abilityAttackLevels };
+      }
       newState.speedMultiplier = s.settings.speedMultiplier || 1;
 
       lastModeRef.current = mode;
@@ -779,7 +782,7 @@ export default function App() {
       },
       {
         id: 'boss_rush' as const, unlocked: maxWaveReached >= 5, need: 5, accent: 'red',
-        title: t(lang, 'boss_rush'), desc: t(lang, 'boss_rush_desc'),
+        title: t(lang, 'boss_rush'), desc: `${t(lang, 'boss_rush_desc')} ${L(lang, 'Potenziamenti del negozio disattivati.', 'Shop upgrades disabled.', 'Mejoras de la tienda desactivadas.', 'Améliorations de la boutique désactivées.', '商店升级不生效。')}`,
         art: (
           <div className="vs-mode-bosses">
             {BOSS_ICON_LIST.map((b) => (
