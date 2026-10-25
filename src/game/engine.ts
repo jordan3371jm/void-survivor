@@ -2,6 +2,7 @@ import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, A
 import { playShoot, playPassiveSound } from './audio';
 import { getAbilityInfo } from './abilityInfo';
 import { updateBoss, updateBossHazards, clearBossHazards, drawBossHazards, drawBossAura } from './bosses';
+import { updatePickups, drawPickups, spawnPickup, rollEnemyDrop } from './progression';
 export { getAbilityInfo } from './abilityInfo';
 
 let idCounter = 0;
@@ -124,6 +125,16 @@ function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: Gam
   ctx.scale(pulse, pulse);
   if (enemy.isBoss) { ctx.shadowColor = enemy.color; ctx.shadowBlur = 25; }
   ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  // lampo bianco quando il nemico viene colpito
+  const ee = enemy as any;
+  if (ee.__lastHp !== undefined && enemy.hp < ee.__lastHp - 0.5) ee.__flash = 0.09;
+  ee.__lastHp = enemy.hp;
+  if (ee.__flash > 0) {
+    ee.__flash -= 1 / 60;
+    ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  }
   ctx.restore();
   return true;
 }
@@ -204,7 +215,7 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     reviveUsed: false, revivePending: false, abilityDamageStats: {},
     speedMultiplier: 1.0, speedBoostTimer: 0,
     currentPlayTime: 0, currentLevel: 1, currentWave: 1, currentScore: 0, currentKills: 0,
-    gameMode, bossRushIndex: 0, bossesDefeated: 0, victory: false
+    gameMode, bossRushIndex: 0, bossesDefeated: 0, victory: false, pickups: [], chestPending: null, rerolls: 2
   };
 }
 
@@ -346,7 +357,7 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     guardian: { radius: 40, hp: 50 * timeMultiplier, speed: 30, expValue: 15, color: '#ffcc00', pattern: 'shoot', shootTimer: 0, shootInterval: 1.5 },
     swarm: { radius: 8, hp: 3 * timeMultiplier, speed: 150, expValue: 1, color: '#88ff88', pattern: 'swarm' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 2700 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_xenomorph: { radius: 70, hp: 1800 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
     boss_cthulhu: { radius: 90, hp: 2200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
     boss_borg_cube: { radius: 85, hp: 2500 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
     boss_space_kraken: { radius: 95, hp: 2400 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
@@ -605,7 +616,7 @@ function processAbilities(state: GameState, dt: number): void {
 }
 
 export function updateGame(state: GameState, dt: number): void {
-  if (state.gameOver || state.paused || state.levelUpPending) return;
+  if (state.gameOver || state.paused || state.levelUpPending || state.chestPending) return;
   // Il timer del gioco accumula il tempo REALE (non influenzato dal speed multiplier)
   state.time += dt;
   // Applica speed multiplier per il gameplay
@@ -829,6 +840,7 @@ export function updateGame(state: GameState, dt: number): void {
       if (tip) { enemy.hp -= tip.sword.damage * gameDt; spawnDamageNumber(state, enemy.pos, tip.sword.damage * gameDt, tip.sword.color, false, 'laser_swords'); spawnParticles(state, enemy.pos, tip.sword.color, 1); }
     }
   }
+  updatePickups(state, gameDt, upgradeAbility, () => applyPassiveAbilities(player), playShoot);
   if (player.exp >= player.expToNext && !state.levelUpPending) {
     if (player.level < 100) { 
       player.exp -= player.expToNext; 
@@ -852,6 +864,9 @@ export function updateGame(state: GameState, dt: number): void {
         state.bossActive = false; 
         state.bossesDefeated = (state.bossesDefeated || 0) + 1;
         clearBossHazards(state, e.id);
+        // ricompense del boss: scrigno del tesoro, un cuore e un "rigenera" in piu'
+        if (!state.gameOver) { spawnPickup(state, e.pos, 'chest'); spawnPickup(state, { x: e.pos.x + 60, y: e.pos.y }, 'heart'); }
+        state.rerolls = (state.rerolls || 0) + 1;
         state.screenShake = 0.8; 
         spawnParticles(state, e.pos, '#ffff00', 20); 
         
@@ -887,6 +902,7 @@ export function updateGame(state: GameState, dt: number): void {
         for (let i = 0; i < 5; i++) spawnExpOrb(state, { x: e.pos.x + (Math.random() - 0.5) * 100, y: e.pos.y + (Math.random() - 0.5) * 100 }, 20); 
       }
       else if (e.type === 'guardian' && Math.random() < 0.3) state.diamondsEarned += 1;
+      if (!e.isBoss) rollEnemyDrop(state, e.pos);
       return false;
     }
     return true;
@@ -996,6 +1012,14 @@ function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
   return pool.slice(0, 3);
 }
 
+/** "Rigenera": nuove scelte di level up (consuma un utilizzo). */
+export function rerollLevelUp(state: GameState): boolean {
+  if (!state.levelUpPending || (state.rerolls || 0) <= 0) return false;
+  state.rerolls = (state.rerolls || 0) - 1;
+  state.levelUpChoices = generateLevelUpChoices(state);
+  return true;
+}
+
 export function applyLevelUpChoice(state: GameState, choice: LevelUpChoice): void {
   if (choice.type === 'ability' && choice.abilityType) { state.player.abilities.push(createAbility(choice.abilityType)); if (choice.abilityType.startsWith('passive_')) applySinglePassiveAbility(choice.abilityType); }
   else if (choice.type === 'upgrade' && choice.abilityType) { const ability = state.player.abilities.find(a => a.type === choice.abilityType); if (ability) { const idx = state.player.abilities.indexOf(ability); state.player.abilities[idx] = upgradeAbility(ability); if (choice.abilityType.startsWith('passive_')) applySinglePassiveAbility(choice.abilityType); } }
@@ -1051,6 +1075,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
     ctx.beginPath(); ctx.moveTo(orb.pos.x, orb.pos.y - r * 0.8); ctx.lineTo(orb.pos.x + r * 0.35, orb.pos.y - r * 0.1); ctx.lineTo(orb.pos.x - r * 0.35, orb.pos.y - r * 0.1); ctx.closePath(); ctx.fill();
   }
+  drawPickups(ctx, state);
   for (const drone of state.drones) { ctx.fillStyle = drone.color; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(drone.pos.x, drone.pos.y, drone.radius * 0.4, 0, Math.PI * 2); ctx.fill(); }
   for (const wave of state.gravityWaves) { const alpha = 1 - (wave.lifetime / wave.maxLifetime); ctx.strokeStyle = wave.color; ctx.lineWidth = 2; ctx.globalAlpha = alpha * 0.5; ctx.beginPath(); ctx.arc(wave.pos.x, wave.pos.y, wave.radius, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
   drawBossHazards(ctx, state, 'ground');
@@ -1609,6 +1634,27 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     }
   }
 
+  // --- Freccia verso il boss quando e' fuori dallo schermo ---
+  const bossOff = state.enemies.find(e => e.isBoss);
+  if (bossOff) {
+    const z = getWorldZoom(width);
+    const sx = (bossOff.pos.x - state.camera.x) * z + width / 2, sy = (bossOff.pos.y - state.camera.y) * z + height / 2;
+    const pad = 74 * s;
+    if (sx < 0 || sx > width || sy < 0 || sy > height) {
+      const a = Math.atan2(sy - height / 2, sx - width / 2);
+      const hx = width / 2 - pad, hy = height / 2 - pad;
+      const k = Math.min(hx / Math.max(1e-6, Math.abs(Math.cos(a))), hy / Math.max(1e-6, Math.abs(Math.sin(a))));
+      const ax = width / 2 + Math.cos(a) * k, ay = height / 2 + Math.sin(a) * k;
+      const pulse = 1 + Math.sin(state.time * 6) * 0.12;
+      ctx.save(); ctx.translate(ax, ay); ctx.rotate(a); ctx.scale(pulse, pulse);
+      ctx.fillStyle = 'rgba(255, 45, 85, 0.9)'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(18 * s, 0); ctx.lineTo(-10 * s, -13 * s); ctx.lineTo(-4 * s, 0); ctx.lineTo(-10 * s, 13 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.restore();
+      const icon = state.currentBossType ? getBossIcon(state.currentBossType) : null;
+      if (icon) { const isz = 30 * s; ctx.drawImage(icon, ax - Math.cos(a) * 30 * s - isz / 2, ay - Math.sin(a) * 30 * s - isz / 2, isz, isz); }
+    }
+  }
+
   // --- Abilita' (in basso al centro) ---
   const activeAbilities = player.abilities.filter(a => !a.type.startsWith('passive_'));
   const passiveAbilities = player.abilities.filter(a => a.type.startsWith('passive_'));
@@ -1618,15 +1664,15 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     let x = (width - total) / 2;
     for (const ability of list) {
       hudRoundRect(ctx, x, y, size, size, size * 0.26);
-      ctx.fillStyle = 'rgba(8, 10, 26, 0.8)'; ctx.fill();
-      ctx.strokeStyle = ability.color; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = ability.evolved ? 'rgba(60, 40, 5, 0.85)' : 'rgba(8, 10, 26, 0.8)'; ctx.fill();
+      ctx.strokeStyle = ability.evolved ? '#fbbf24' : ability.color; ctx.lineWidth = ability.evolved ? 3 : 2; ctx.stroke();
       const pad = size * 0.1;
       drawAbilityIcon(ctx, ability.type, ability.color, x + pad, y + pad, size - pad * 2);
       // livello
-      const lvl = String(ability.level);
+      const lvl = ability.evolved ? 'EVO' : String(ability.level);
       const lw = Math.max(13 * s, 7 * s + lvl.length * 6 * s), lh = 12 * s;
       hudRoundRect(ctx, x + size - lw + 3 * s, y + size - lh + 3 * s, lw, lh, lh / 2);
-      ctx.fillStyle = ability.level >= ability.maxLevel ? '#f59e0b' : '#111427'; ctx.fill();
+      ctx.fillStyle = ability.evolved ? '#fbbf24' : ability.level >= ability.maxLevel ? '#f59e0b' : '#111427'; ctx.fill();
       ctx.strokeStyle = ability.color; ctx.lineWidth = 1; ctx.stroke();
       ctx.fillStyle = '#ffffff'; ctx.font = `800 ${8 * s}px ${HUD_FONT}`; ctx.textAlign = 'center';
       ctx.fillText(lvl, x + size - lw / 2 + 3 * s, y + size - lh / 2 + 3.5 * s);

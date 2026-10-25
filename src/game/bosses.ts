@@ -217,10 +217,10 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
   // REGINA XENOMORFA: acido, balzi, uova/parassiti, coda, urlo
   boss_xenomorph: [
     { id: 'acid', weight: 3, run: c => {
-      const n = c.enraged ? 7 : 4;
+      const n = c.enraged ? 5 : 3;
       for (let i = 0; i < n; i++) c.at(i * 0.2, () => {
         const p = predicted(c.state, 0.7 + i * 0.1);
-        strikeZone(c, p.x + rnd(-70, 70), p.y + rnd(-70, 70), 78, 0.8, 'acid', '#8cff3a', { linger: 3.6, dps: c.dmg * 1.1 });
+        strikeZone(c, p.x + rnd(-70, 70), p.y + rnd(-70, 70), 72, 0.85, 'acid', '#8cff3a', { linger: 3.0, dps: c.dmg * 0.9 });
         playShoot('acid');
       });
       return n * 0.2 + 0.9;
@@ -241,10 +241,10 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       });
       return volleys * 0.32 + 0.4;
     } },
-    { id: 'brood', weight: 1.5, run: c => { summon(c.state, c.boss, 'parasite', 6 + c.tier); playShoot('boss_roar'); return 0.8; } },
+    { id: 'brood', weight: 1.5, run: c => { summon(c.state, c.boss, 'parasite', 3 + Math.floor(c.tier / 2)); playShoot('boss_roar'); return 0.8; } },
     { id: 'tail', weight: 2, run: c => {
       c.ai.anchor = 1.0 * c.tele;
-      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 170, 0.85, 'tail', '#c8ff9a', { burst: c.dmg * 1.5 });
+      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 150, 0.9, 'tail', '#c8ff9a', { burst: c.dmg * 1.1 });
       c.at(0.85 * c.tele, () => playShoot('boss_slam'));
       return 1.3;
     } },

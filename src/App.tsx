@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import type { GameState, LevelUpChoice, AbilityType } from './game/types';
+import type { GameState, LevelUpChoice, AbilityType, ChestReward } from './game/types';
+import { EVOLUTIONS } from './game/progression';
 import { getAbilityInfo } from './game/abilityInfo';
 import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, stopBackgroundMusic, setAudioPaused } from './game/audio';
 import { t, Language, languageNames } from './game/i18n';
@@ -9,7 +10,7 @@ import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges } from './game/dailyChallenges';
-import { ArrowLeft, CalendarDays, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
@@ -145,17 +146,22 @@ export default function App() {
   const [showDailyRewardModal, setShowDailyRewardModal] = useState(false);
   const [showDailyEventsModal, setShowDailyEventsModal] = useState(false);
   const [adNotice, setAdNotice] = useState('');
+  const [chestRewards, setChestRewards] = useState<ChestReward[] | null>(null);
+  const [rerollsLeft, setRerollsLeft] = useState(0);
 
   const pausedRef = useRef(false);
   const levelUpShownRef = useRef(false);
   const gameOverShownRef = useRef(false);
   const reviveShownRef = useRef(false);
+  const chestShownRef = useRef(false);
   const platformPausedRef = useRef(false); // pausa richiesta da Playgama
   const joystickRef = useRef<{ active: boolean; id: number | null; startX: number; startY: number; currentX: number; currentY: number }>({
     active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0
   });
 
   const lang = store.settings.language;
+  // solo in sviluppo: accesso allo stato della partita per i test automatici
+  if (import.meta.env.DEV) (window as any).__vsGame = gameStateRef;
 
   useEffect(() => {
     setSfxVolume(store.settings.sfxVolume);
@@ -426,11 +432,17 @@ export default function App() {
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        if (!pausedRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending) engine.updateGame(state, dt);
+        if (!pausedRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
+
+        if (state.chestPending && !chestShownRef.current) {
+          chestShownRef.current = true;
+          setChestRewards([...state.chestPending]);
+        }
 
         if (state.levelUpPending && !levelUpShownRef.current) {
           levelUpShownRef.current = true;
           setLevelUpChoices([...state.levelUpChoices]);
+          setRerollsLeft(state.rerolls || 0);
           setLevelUpPending(true);
         }
         if (state.revivePending && !reviveShownRef.current) {
@@ -508,6 +520,10 @@ export default function App() {
         newState.player.critChance = s.stats.critChance || 0;
         newState.player.critDamage = s.stats.critDamage || 150;
         newState.player.abilityAttackBonuses = { ...s.abilityAttackLevels };
+      } else {
+        // Boss Rush: niente potenziamenti, ma si parte con 300 di vita
+        newState.player.maxHp = 300;
+        newState.player.hp = 300;
       }
       newState.speedMultiplier = s.settings.speedMultiplier || 1;
 
@@ -518,6 +534,8 @@ export default function App() {
       gameOverShownRef.current = false;
       levelUpShownRef.current = false;
       reviveShownRef.current = false;
+      chestShownRef.current = false;
+      setChestRewards(null);
       joystickRef.current = { active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0 };
       setShowModeSelection(false);
       setGameOver(false);
@@ -561,6 +579,21 @@ export default function App() {
     if (!state || !state.levelUpPending) return;
     gameEngineRef.current?.applyLevelUpChoice(state, choice);
     levelUpShownRef.current = false; setLevelUpPending(false); setLevelUpChoices([]);
+  }, []);
+
+  const handleReroll = useCallback(() => {
+    const state = gameStateRef.current;
+    if (state && gameEngineRef.current?.rerollLevelUp(state)) {
+      setLevelUpChoices([...state.levelUpChoices]);
+      setRerollsLeft(state.rerolls || 0);
+    }
+  }, []);
+
+  const closeChest = useCallback(() => {
+    const state = gameStateRef.current;
+    if (state) state.chestPending = null;
+    chestShownRef.current = false;
+    setChestRewards(null);
   }, []);
 
   const handleRevive = useCallback(async () => {
@@ -664,6 +697,8 @@ export default function App() {
       const key = e.key.toLowerCase();
       if (MOVE_KEYS.has(key)) e.preventDefault();
       if (!e.repeat && (e.key === 'Escape' || key === 'p')) { togglePause(); return; }
+      if (state.chestPending && !e.repeat && (key === 'enter' || key === ' ')) { closeChest(); return; }
+      if (state.levelUpPending && !e.repeat && key === 'r') { handleReroll(); return; }
       if (state.levelUpPending && !e.repeat && ['1', '2', '3'].includes(key)) {
         const choice = state.levelUpChoices[Number(key) - 1];
         if (choice) handleLevelUpChoice(choice);
@@ -743,16 +778,16 @@ export default function App() {
       canvas?.removeEventListener('touchend', onTouchEnd);
       canvas?.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [screen, togglePause, handleLevelUpChoice, setPausedState]);
+  }, [screen, togglePause, handleLevelUpChoice, setPausedState, closeChest, handleReroll]);
 
   // Se compare un pannello (level up, pausa, ecc.) il dito sollevato sopra di esso non arriva al canvas
   useEffect(() => {
-    if (levelUpPending || paused || gameOver || revivePending) {
+    if (levelUpPending || paused || gameOver || revivePending || chestRewards) {
       const state = gameStateRef.current;
       if (state) { state.keys.clear(); state.touchDir = null; }
       joystickRef.current = { ...joystickRef.current, active: false, id: null };
     }
-  }, [levelUpPending, paused, gameOver, revivePending]);
+  }, [levelUpPending, paused, gameOver, revivePending, chestRewards]);
 
   useEffect(() => () => { stopGameLoop(); }, [stopGameLoop]);
 
@@ -1094,6 +1129,11 @@ export default function App() {
                     <AbilityIcon type={type} color={info.color} size={56} />
                     <h3 className="vs-card-title">{t(lang, info.name)}</h3>
                     <span className="vs-muted">{t(lang, 'attack_level')}: <b className="vs-accent-text">+{atkLvl}</b></span>
+                    {EVOLUTIONS[type] && (
+                      <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + questa passiva + scrigno di un boss', 'Max level + this passive + boss chest', 'Nivel máximo + esta pasiva + cofre de jefe', 'Niveau max + ce passif + coffre de boss', '满级+此被动+Boss宝箱')}>
+                        <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))}
+                      </span>
+                    )}
                     <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!canAfford} onClick={() => { const ns = upgradeAbilityAttack(storeRef.current, type); if (ns) commitStore(ns); }}>
                       <Sparkles size={14} />+1 · <Coins size={14} />100
                     </button>
@@ -1265,7 +1305,7 @@ export default function App() {
       <div className="vs-game">
         <canvas ref={canvasRef} className="vs-game-canvas" />
 
-        {!gameOver && !levelUpPending && !revivePending && (
+        {!gameOver && !levelUpPending && !revivePending && !chestRewards && (
           <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (Esc)`} onClick={togglePause}>
             {paused ? <Play size={20} /> : <Pause size={20} />}
           </button>
@@ -1307,11 +1347,53 @@ export default function App() {
                           </span>
                         )}
                         <span className="vs-choice-desc">{isGold ? '+100 ' + t(lang, 'coins') : t(lang, choice.description)}</span>
+                        {choice.abilityType && EVOLUTIONS[choice.abilityType] && (choice.type === 'ability' || (owned && curLvl + 1 >= maxLvl)) && (
+                          <span className="vs-choice-evo">
+                            <AbilityIcon type={EVOLUTIONS[choice.abilityType]!} color="#fbbf24" size={18} />
+                            {L(lang, 'Evolve con', 'Evolves with', 'Evoluciona con', 'Évolue avec', '进化需要')} {clean(t(lang, getAbilityInfo(EVOLUTIONS[choice.abilityType]!).name))}
+                          </span>
+                        )}
                       </span>
                     </button>
                   );
                 })}
               </div>
+              {rerollsLeft > 0 && (
+                <button type="button" className="vs-btn vs-btn--ghost vs-reroll" onClick={handleReroll} title="R">
+                  <Shuffle size={18} />{L(lang, 'Rigenera', 'Reroll', 'Cambiar', 'Relancer', '刷新')} ({rerollsLeft})
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {chestRewards && (
+          <div className="vs-overlay vs-overlay--levelup">
+            <div className="vs-chest">
+              <div className="vs-chest-burst" aria-hidden="true"><Gift size={46} /></div>
+              <h2 className="vs-levelup-title">{L(lang, 'TESORO!', 'TREASURE!', '¡TESORO!', 'TRÉSOR !', '宝藏！')}</h2>
+              <div className="vs-chest-rewards">
+                {chestRewards.map((r, i) => {
+                  const info = r.abilityType ? getAbilityInfo(r.abilityType) : null;
+                  return (
+                    <div key={i} className={`vs-chest-item${r.kind === 'evolve' ? ' is-evo' : ''}`} style={{ ['--accent' as any]: info?.color || '#fbbf24', animationDelay: `${0.25 + i * 0.22}s` }}>
+                      <span className="vs-chest-icon">
+                        {r.abilityType ? <AbilityIcon type={r.abilityType} color={info!.color} size={48} /> : r.kind === 'coins' ? <Coins size={30} /> : <Heart size={30} />}
+                      </span>
+                      <span className="vs-chest-text">
+                        <b>{r.abilityType ? clean(t(lang, info!.name)) : r.kind === 'coins' ? `+${r.amount} ${t(lang, 'coins')}` : `+${r.amount} HP`}</b>
+                        <small>
+                          {r.kind === 'evolve' ? L(lang, 'ARMA EVOLUTA! Danno x2.2', 'WEAPON EVOLVED! Damage x2.2', '¡ARMA EVOLUCIONADA! Daño x2.2', 'ARME ÉVOLUÉE ! Dégâts x2.2', '武器进化！伤害x2.2')
+                            : r.kind === 'upgrade' ? `${t(lang, 'level')} ${r.level}`
+                            : r.kind === 'coins' ? L(lang, 'Bottino del boss', 'Boss loot', 'Botín del jefe', 'Butin du boss', 'Boss战利品')
+                            : L(lang, 'Riparazioni', 'Repairs', 'Reparaciones', 'Réparations', '修复')}
+                        </small>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" className="vs-btn vs-btn--primary vs-btn--lg" onClick={closeChest}><Play size={18} />{L(lang, 'Continua', 'Continue', 'Continuar', 'Continuer', '继续')}</button>
             </div>
           </div>
         )}
