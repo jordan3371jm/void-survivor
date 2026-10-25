@@ -67,6 +67,7 @@ export function startBackgroundMusic() {
         trackAudio.addEventListener('error', () => { trackFailed = true; trackAudio = null; if (isMusicPlaying) { isMusicPlaying = false; startBackgroundMusic(); } });
       }
       trackAudio.volume = musicVolume;
+      trackAudio.currentTime = 0; // ogni partita riparte dall'inizio del brano
       trackAudio.play().catch(e => console.warn('[Audio] musica in attesa di un tocco:', e));
       isMusicPlaying = true;
       return;

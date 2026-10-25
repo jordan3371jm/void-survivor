@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { GameState, LevelUpChoice, AbilityType } from './game/types';
 import { getAbilityInfo } from './game/abilityInfo';
-import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, setAudioPaused } from './game/audio';
+import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, stopBackgroundMusic, setAudioPaused } from './game/audio';
 import { t, Language, languageNames } from './game/i18n';
 import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeAbilityAttack, getAbilityAttackBonus, applyDiamondUpgrade, getDiamondUpgradeCost, applyCoinUpgrade, getCoinUpgradeCost, getStatLevel, getStatMaxLevel, DiamondUpgradeType, CoinUpgradeType, addHighScore, createUserProfile, saveUserProfile } from './game/store';
 import { playgama } from './game/playgame';
@@ -551,6 +551,7 @@ export default function App() {
     setLevelUpPending(false);
     setRevivePending(false);
     setShowDamageStats(false);
+    stopBackgroundMusic(); // la musica della partita si ferma quando si torna alla home
     setAudioPaused(false);
     setScreen('home');
   }, [finalizeRun, stopGameLoop]);
