@@ -376,7 +376,15 @@ export default function App() {
     ns = addHighScore(ns, score, state.kills, state.time, state.player.level);
 
     const p = ns.userProfile!;
-    let profile: any = {
+    // Boss Rush: non conta per gli obiettivi (ne' per i contatori su cui si basano); restano solo i danni per arma
+    const bossRush = state.gameMode === 'boss_rush';
+    let profile: any = bossRush ? {
+      ...p,
+      abilityDamageStats: {
+        ...(p.abilityDamageStats || {}),
+        ...Object.fromEntries(Object.entries(state.abilityDamageStats || {}).map(([key, value]) => [key, (p.abilityDamageStats?.[key] || 0) + (value as number)])),
+      },
+    } : {
       ...p,
       totalKills: (p.totalKills || 0) + state.kills,
       totalBossesDefeated: (p.totalBossesDefeated || 0) + (state.bossesDefeated || 0),
@@ -395,7 +403,7 @@ export default function App() {
       maxScore: Math.max(p.maxScore || 0, state.score),
       maxWave: Math.max(p.maxWave || 0, state.wave),
     };
-    profile = checkAndCompleteAchievements(profile, ns.settings.speedBoostTimer);
+    if (!bossRush) profile = checkAndCompleteAchievements(profile, ns.settings.speedBoostTimer);
     ns = { ...ns, userProfile: profile };
     commitStore(ns);
     try {

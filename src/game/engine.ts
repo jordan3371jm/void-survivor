@@ -369,6 +369,8 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
   // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
+  // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
+  if (type.startsWith('boss_') && state.gameMode === 'boss_rush') { const i = state.bossRushIndex || 0; base.hp = 1400 * (1 + i * 0.5) * (1 + i * 0.06); }
   // Maledizione: nemici normali con piu' salute e velocita' (i boss non vengono modificati)
   const curseMul = type.startsWith('boss_') ? 1 : 1 + Math.max(0, state.player.curseLevel) / 100;
   // I danni dei nemici crescono col tempo (prima restavano 10 per tutta la partita: con un po' di armatura si era invincibili)

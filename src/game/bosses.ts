@@ -138,7 +138,9 @@ function lineStrike(c: MoveCtx, cx: number, cy: number, a: number, length: numbe
   });
 }
 
-function shockRing(c: MoveCtx, speed: number, width: number, gapSize: number, color: string, style: HazardStyle, gapAngle = Math.random() * TAU, gapCount = 1) {
+// Ogni anello ha sempre almeno 3 varchi (larghi almeno 0,8 rad): si puo' sempre schivare
+function shockRing(c: MoveCtx, speed: number, width: number, gapSize: number, color: string, style: HazardStyle, gapAngle = Math.random() * TAU, gapCount = 3) {
+  gapCount = Math.max(3, gapCount); gapSize = Math.max(0.8, gapSize);
   return addHazard(c.state, {
     kind: 'ring', style, color, x: c.boss.pos.x, y: c.boss.pos.y, radius: c.boss.radius * 0.6,
     ringSpeed: speed * c.speedMul, width, gapAngle, gapSize, gapCount, maxRadius: 1300,
@@ -186,15 +188,15 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'superlaser', weight: 3, run: c => {
       c.ai.anchor = 2.6 * c.tele;
       playShoot('boss_charge');
-      beamFromBoss(c, { angle: c.aim(), telegraph: 1.4, active: 1.15, width: 64 + c.tier * 5, dps: c.dmg * 2.4, style: 'superlaser', color: '#4dff7a', trackTelegraph: true, sweep: c.enraged ? (Math.random() < 0.5 ? -0.45 : 0.45) : 0 });
+      beamFromBoss(c, { angle: c.aim(), telegraph: 1.4, active: 1.15, width: 64 + Math.min(c.tier, 6) * 5, dps: c.dmg * 2.4, style: 'superlaser', color: '#4dff7a', trackTelegraph: true, sweep: c.enraged ? (Math.random() < 0.5 ? -0.45 : 0.45) : 0 });
       c.at(1.4 * c.tele, () => { playShoot('boss_beam'); c.state.screenShake = 0.6; });
       return 2.7;
     } },
     { id: 'turbolaser', weight: 3, run: c => {
       const volleys = c.enraged ? 5 : 3;
       for (let v = 0; v < volleys; v++) c.at(v * 0.38, () => {
-        const a = c.aim(); const n = 5 + Math.floor(c.tier / 2);
-        for (let i = 0; i < n; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + (i - (n - 1) / 2) * 0.13, 340 * c.speedMul, c.dmg * 0.5, '#ff4040', 6);
+        const a = c.aim(); const n = Math.min(7, 5 + Math.floor(c.tier / 3)); // varchi tra i colpi abbastanza larghi da passarci
+        for (let i = 0; i < n; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + (i - (n - 1) / 2) * 0.2, 340 * c.speedMul, c.dmg * 0.5, '#ff4040', 6);
         playShoot('boss_bolt');
       });
       return volleys * 0.38 + 0.4;
@@ -235,22 +237,23 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'acid_spray', weight: 2.5, run: c => {
       const volleys = c.enraged ? 4 : 3;
       for (let v = 0; v < volleys; v++) c.at(v * 0.32, () => {
-        const a = c.aim(); const n = 7 + Math.floor(c.tier / 2);
-        for (let i = 0; i < n; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + (i - (n - 1) / 2) * 0.16 + (v % 2) * 0.08, 300 * c.speedMul, c.dmg * 0.55, '#8cff3a', 8);
+        const a = c.aim(); const n = Math.min(9, 7 + Math.floor(c.tier / 3));
+        for (let i = 0; i < n; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + (i - (n - 1) / 2) * 0.2 + (v % 2) * 0.1, 300 * c.speedMul, c.dmg * 0.55, '#8cff3a', 8);
         playShoot('acid');
       });
       return volleys * 0.32 + 0.4;
     } },
     { id: 'brood', weight: 1.5, run: c => { summon(c.state, c.boss, 'parasite', 3 + Math.floor(c.tier / 2)); playShoot('boss_roar'); return 0.8; } },
     { id: 'tail', weight: 2, run: c => {
-      c.ai.anchor = 1.0 * c.tele;
-      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 150, 0.9, 'tail', '#c8ff9a', { burst: c.dmg * 1.1 });
-      c.at(0.85 * c.tele, () => playShoot('boss_slam'));
+      c.ai.anchor = 1.35 * c.tele;
+      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 115, 1.3, 'tail', '#c8ff9a', { burst: c.dmg * 1.1 });
+      c.at(1.25 * c.tele, () => playShoot('boss_slam'));
       return 1.3;
     } },
     { id: 'screech', weight: 2, phase2Only: true, run: c => {
       playShoot('boss_roar');
-      for (let k = 0; k < 3; k++) c.at(k * 0.5, () => shockRing(c, 370, 26, 0.9, '#b6ff6a', 'screech'));
+      const base = Math.random() * TAU; const turn = Math.random() < 0.5 ? 0.4 : -0.4;
+      for (let k = 0; k < 3; k++) c.at(k * 0.6, () => shockRing(c, 290, 26, 0.9, '#b6ff6a', 'screech', base + k * turn));
       return 1.8;
     } },
   ],
@@ -275,7 +278,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       return n * 0.75 + 0.6;
     } },
     { id: 'eyes', weight: 2, run: c => {
-      for (let i = 0; i < 5; i++) c.at(i * 0.35, () => { strikeZone(c, c.state.player.pos.x, c.state.player.pos.y, 85, 0.8, 'eye', '#ffe66b', { burst: c.dmg }); });
+      for (let i = 0; i < 5; i++) c.at(i * 0.35, () => { strikeZone(c, c.state.player.pos.x, c.state.player.pos.y, 80, 0.95, 'eye', '#ffe66b', { burst: c.dmg }); });
       return 2.6;
     } },
     { id: 'deep_spiral', weight: 2, run: c => { spiral(c, c.enraged ? 3 : 2, 1.8, 9, 190, 0.32, '#3cf0a0'); return 2.0; } },
@@ -285,7 +288,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
   boss_borg_cube: [
     { id: 'tractor', weight: 3, run: c => {
       c.ai.anchor = 3.0 * c.tele;
-      beamFromBoss(c, { angle: c.aim(), telegraph: 0.7, active: 2.3, width: 96, length: 1100, dps: c.dmg * 0.7, style: 'tractor', color: '#4dff9a', trackActive: 0.9, pull: 170 });
+      beamFromBoss(c, { angle: c.aim(), telegraph: 0.7, active: 2.3, width: 96, length: 1100, dps: c.dmg * 0.7, style: 'tractor', color: '#4dff9a', trackActive: 0.4, pull: 120 });
       c.at(0.7 * c.tele, () => playShoot('boss_beam'));
       return 3.1;
     } },
@@ -335,7 +338,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'sweep', weight: 2, run: c => {
       const a = c.aim(); const dir = Math.random() < 0.5 ? 1 : -1;
       const n = c.enraged ? 3 : 2;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a - dir * 1.0 + (i * TAU) / n, telegraph: 0.8, active: 1.7, width: 42, length: 560, dps: c.dmg * 1.4, style: 'tentacle', color: '#c45cff', sweep: dir * 1.3 });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a - dir * 1.0 + (i * TAU) / n, telegraph: 0.8, active: 1.7, width: 42, length: 560, dps: c.dmg * 1.4, style: 'tentacle', color: '#c45cff', sweep: dir * 1.0 });
       c.ai.anchor = 2.5 * c.tele;
       return 2.6;
     } },
@@ -353,7 +356,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'cosmic_ray', weight: 2.5, run: c => {
       const n = c.enraged ? 4 : 2; const a = c.aim(); const dir = Math.random() < 0.5 ? 1 : -1;
       c.ai.anchor = 4.2 * c.tele;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i * TAU) / n + dir * 0.6, telegraph: 1.0, active: 3.0, width: 38, length: 950, dps: c.dmg * 1.6, style: 'cosmic', color: '#d9a3ff', sweep: dir * (1.05 + c.tier * 0.04) });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i * TAU) / n + dir * 0.6, telegraph: 1.0, active: 3.0, width: 38, length: 950, dps: c.dmg * 1.6, style: 'cosmic', color: '#d9a3ff', sweep: dir * (0.75 + Math.min(c.tier, 8) * 0.02) });
       c.at(1.0 * c.tele, () => playShoot('boss_beam'));
       return 4.2;
     } },
@@ -378,9 +381,9 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       return 1.4;
     } },
     { id: 'nova', weight: 2.5, run: c => {
-      c.ai.anchor = 1.6 * c.tele;
-      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 90, 1.0, 'nova', '#ff4dff', { burst: c.dmg * 1.4 });
-      c.at(1.0 * c.tele, () => { shockRing(c, 430, 30, 1.0, '#ff7aff', 'nova'); playShoot('antimatter_bomb'); c.state.screenShake = 0.5; });
+      c.ai.anchor = 1.8 * c.tele;
+      strikeZone(c, c.boss.pos.x, c.boss.pos.y, c.boss.radius + 80, 1.2, 'nova', '#ff4dff', { burst: c.dmg * 1.4 });
+      c.at(1.2 * c.tele, () => { shockRing(c, 330, 30, 1.0, '#ff7aff', 'nova'); playShoot('antimatter_bomb'); c.state.screenShake = 0.5; });
       return 2.0;
     } },
     { id: 'judgment', weight: 3, run: c => {
@@ -407,7 +410,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'gaze', weight: 3, run: c => {
       const n = c.enraged ? 4 : 3; const a = c.aim();
       c.ai.anchor = 3.4 * c.tele;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i - (n - 1) / 2) * 0.7, telegraph: 1.0, active: 2.3, width: 26, length: 1200, dps: c.dmg * 1.3, style: 'gaze', color: '#ffe23d', trackActive: 0.55 });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i - (n - 1) / 2) * 0.7, telegraph: 1.0, active: 2.3, width: 26, length: 1200, dps: c.dmg * 1.3, style: 'gaze', color: '#ffe23d', trackActive: 0.32 });
       c.at(1.0 * c.tele, () => playShoot('boss_beam'));
       return 3.4;
     } },
@@ -429,7 +432,8 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'abyss', weight: 2, phase2Only: true, run: c => {
       const p = predicted(c.state, 0.6);
       addHazard(c.state, { kind: 'well', style: 'blackhole', color: '#ffcf3d', x: p.x, y: p.y, radius: 280, pull: 160, telegraph: 0.8, active: 3.0, damage: c.dmg * 1.5, continuous: true });
-      for (let i = 0; i < 3; i++) c.at(0.4 + i * 0.6, () => shockRing(c, 260, 24, 1.0, '#ffe23d', 'eldritch'));
+      const ab = Math.random() * TAU;
+      for (let i = 0; i < 3; i++) c.at(0.4 + i * 0.7, () => shockRing(c, 250, 24, 1.0, '#ffe23d', 'eldritch', ab + i * 0.35));
       playShoot('stellar_blackhole');
       return 2.6;
     } },
@@ -504,8 +508,8 @@ export function updateBoss(state: GameState, boss: Enemy, dt: number, toPlayer: 
     const ctx: MoveCtx = {
       state, boss, ai, tier, enraged: ai.enraged,
       dmg: boss.damage,
-      speedMul: 1 + tier * 0.06 + (ai.enraged ? 0.12 : 0),
-      tele: Math.max(0.7, 1 - tier * 0.03 - (ai.enraged ? 0.08 : 0)),
+      speedMul: 1 + Math.min(tier, 8) * 0.05 + (ai.enraged ? 0.1 : 0),
+      tele: Math.max(0.82, 1 - tier * 0.025 - (ai.enraged ? 0.06 : 0)),
       aim: () => ang(boss.pos, state.player.pos),
       at: (delay, fn) => ai.steps.push({ at: ai.time + delay, fn }),
     };
@@ -530,7 +534,7 @@ export function updateBossHazards(state: GameState, dt: number): void {
     }
     const activeT = h.t - h.telegraph;
     if (activeT < 0) {
-      if (h.kind === 'beam' && h.trackTelegraph && h.t < h.telegraph * 0.7) h.angle = ang({ x: h.x, y: h.y }, p.pos);
+      if (h.kind === 'beam' && h.trackTelegraph && h.t < h.telegraph * 0.55) h.angle = ang({ x: h.x, y: h.y }, p.pos);
       continue;
     }
     if (activeT > h.active) { list.splice(i, 1); continue; }
@@ -543,7 +547,7 @@ export function updateBossHazards(state: GameState, dt: number): void {
       }
       const inBeam = segDist(p.pos.x, p.pos.y, h.x, h.y, h.angle, h.length) < h.width / 2 + p.radius * 0.6;
       if (h.pull && segDist(p.pos.x, p.pos.y, h.x, h.y, h.angle, h.length) < h.width * 1.2) {
-        const a = ang(p.pos, { x: h.x, y: h.y }); p.pos.x += Math.cos(a) * h.pull * dt; p.pos.y += Math.sin(a) * h.pull * dt;
+        const a = ang(p.pos, { x: h.x, y: h.y }); const k = Math.min(h.pull, p.speed * 0.7); p.pos.x += Math.cos(a) * k * dt; p.pos.y += Math.sin(a) * k * dt;
       }
       if (!h.harmless && inBeam) {
         if (h.continuous) hurtPlayer(state, h.damage, true, dt);
@@ -574,7 +578,7 @@ export function updateBossHazards(state: GameState, dt: number): void {
       const dd = dist(p.pos, { x: h.x, y: h.y });
       if (dd < h.radius && dd > 1) {
         const a = ang(p.pos, { x: h.x, y: h.y });
-        const k = h.pull * (0.35 + 0.65 * (1 - dd / h.radius));
+        const k = Math.min(h.pull * (0.35 + 0.65 * (1 - dd / h.radius)), p.speed * 0.7); // la spinta non supera mai il 70% della velocita' del giocatore
         p.pos.x += Math.cos(a) * k * dt; p.pos.y += Math.sin(a) * k * dt;
       }
       if (!h.harmless && h.continuous && dd < 60) hurtPlayer(state, h.damage, true, dt);
