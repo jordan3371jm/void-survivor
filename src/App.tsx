@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import type { GameState, LevelUpChoice, AbilityType, ChestReward } from './game/types';
 import { EVOLUTIONS } from './game/progression';
+import { getEvolutionName } from './game/evolutions';
 import { getAbilityInfo } from './game/abilityInfo';
 import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, stopBackgroundMusic, setAudioPaused } from './game/audio';
 import { t, Language, languageNames } from './game/i18n';
@@ -78,9 +79,9 @@ function formatTime(seconds: number): string {
 function Currency({ store, compact }: { store: GameStore; compact?: boolean }) {
   return (
     <div className={`vs-currency${compact ? ' is-compact' : ''}`}>
-      <span className="vs-chip vs-chip--coin"><Coins size={15} aria-hidden="true" />{store.coins.toLocaleString()}</span>
-      <span className="vs-chip vs-chip--gem"><Gem size={15} aria-hidden="true" />{store.diamonds.toLocaleString()}</span>
-      {store.points > 0 && <span className="vs-chip vs-chip--star"><Star size={15} aria-hidden="true" />{store.points.toLocaleString()}</span>}
+      <span className="vs-chip vs-chip--coin"><Coins size={15} aria-hidden="true" />{Math.round(store.coins)}</span>
+      <span className="vs-chip vs-chip--gem"><Gem size={15} aria-hidden="true" />{Math.round(store.diamonds)}</span>
+      {store.points > 0 && <span className="vs-chip vs-chip--star"><Star size={15} aria-hidden="true" />{Math.round(store.points)}</span>}
     </div>
   );
 }
@@ -1131,7 +1132,7 @@ export default function App() {
                     <span className="vs-muted">{t(lang, 'attack_level')}: <b className="vs-accent-text">+{atkLvl}</b></span>
                     {EVOLUTIONS[type] && (
                       <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + questa passiva + scrigno di un boss', 'Max level + this passive + boss chest', 'Nivel máximo + esta pasiva + cofre de jefe', 'Niveau max + ce passif + coffre de boss', '满级+此被动+Boss宝箱')}>
-                        <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))}
+                        <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))} → <b>{getEvolutionName(type, lang)}</b>
                       </span>
                     )}
                     <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!canAfford} onClick={() => { const ns = upgradeAbilityAttack(storeRef.current, type); if (ns) commitStore(ns); }}>
@@ -1350,7 +1351,7 @@ export default function App() {
                         {choice.abilityType && EVOLUTIONS[choice.abilityType] && (choice.type === 'ability' || (owned && curLvl + 1 >= maxLvl)) && (
                           <span className="vs-choice-evo">
                             <AbilityIcon type={EVOLUTIONS[choice.abilityType]!} color="#fbbf24" size={18} />
-                            {L(lang, 'Evolve con', 'Evolves with', 'Evoluciona con', 'Évolue avec', '进化需要')} {clean(t(lang, getAbilityInfo(EVOLUTIONS[choice.abilityType]!).name))}
+                            {L(lang, 'Evolve con', 'Evolves with', 'Evoluciona con', 'Évolue avec', '进化需要')} {clean(t(lang, getAbilityInfo(EVOLUTIONS[choice.abilityType]!).name))} → {getEvolutionName(choice.abilityType, lang)}
                           </span>
                         )}
                       </span>
@@ -1381,9 +1382,9 @@ export default function App() {
                         {r.abilityType ? <AbilityIcon type={r.abilityType} color={info!.color} size={48} /> : r.kind === 'coins' ? <Coins size={30} /> : <Heart size={30} />}
                       </span>
                       <span className="vs-chest-text">
-                        <b>{r.abilityType ? clean(t(lang, info!.name)) : r.kind === 'coins' ? `+${r.amount} ${t(lang, 'coins')}` : `+${r.amount} HP`}</b>
+                        <b>{r.abilityType ? (r.kind === 'evolve' ? getEvolutionName(r.abilityType, lang) || clean(t(lang, info!.name)) : clean(t(lang, info!.name))) : r.kind === 'coins' ? `+${r.amount} ${t(lang, 'coins')}` : `+${r.amount} HP`}</b>
                         <small>
-                          {r.kind === 'evolve' ? L(lang, 'ARMA EVOLUTA! Danno x2.2', 'WEAPON EVOLVED! Damage x2.2', '¡ARMA EVOLUCIONADA! Daño x2.2', 'ARME ÉVOLUÉE ! Dégâts x2.2', '武器进化！伤害x2.2')
+                          {r.kind === 'evolve' ? `${clean(t(lang, info!.name))} → ` + L(lang, 'EVOLUTA! Danno x2.2', 'EVOLVED! Damage x2.2', '¡EVOLUCIONADA! Daño x2.2', 'ÉVOLUÉE ! Dégâts x2.2', '进化！伤害x2.2')
                             : r.kind === 'upgrade' ? `${t(lang, 'level')} ${r.level}`
                             : r.kind === 'coins' ? L(lang, 'Bottino del boss', 'Boss loot', 'Botín del jefe', 'Butin du boss', 'Boss战利品')
                             : L(lang, 'Riparazioni', 'Repairs', 'Reparaciones', 'Réparations', '修复')}
@@ -1448,7 +1449,7 @@ export default function App() {
                 <div><span>{t(lang, 'time')}</span><b>{formatTime(finalStats.time)}</b></div>
                 <div><span>{t(lang, 'level')}</span><b className="vs-text-cyan">{finalStats.level}</b></div>
                 <div><span>{t(lang, 'kills')}</span><b className="vs-text-danger">{finalStats.kills}</b></div>
-                <div><span>{t(lang, 'score')}</span><b className="vs-text-gold">{finalStats.score.toLocaleString()}</b></div>
+                <div><span>{t(lang, 'score')}</span><b className="vs-text-gold">{Math.round(finalStats.score)}</b></div>
               </div>
               <div className="vs-rewards">
                 <span className="vs-chip vs-chip--coin"><Coins size={16} />+{finalStats.coins}</span>
@@ -1487,7 +1488,7 @@ export default function App() {
                     <div key={abilityType} className="vs-damage-row" style={{ ['--accent' as any]: info.color }}>
                       <AbilityIcon type={abilityType} color={info.color} size={34} />
                       <div className="vs-damage-info">
-                        <div className="vs-row"><b>{t(lang, info.name)}</b><span>{Math.round(damage).toLocaleString()}</span></div>
+                        <div className="vs-row"><b>{gameStateRef.current?.player.abilities.find(a => a.type === abilityType)?.evolved ? getEvolutionName(abilityType as any, lang) : t(lang, info.name)}</b><span>{Math.round(damage)}</span></div>
                         <span className="vs-progress"><span style={{ width: `${(damage / maxDamage) * 100}%` }} /></span>
                       </div>
                     </div>

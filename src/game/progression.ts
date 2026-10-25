@@ -1,6 +1,7 @@
 // ---------------------------------------------------------------------------
 // Scrigni del tesoro, evoluzione delle armi e oggetti da raccogliere.
 // ---------------------------------------------------------------------------
+import { getEvolutionColor } from './evolutions';
 import type { AbilityType, ChestReward, GameState, Pickup, Vector2 } from './types';
 
 /** Arma -> passiva necessaria per l'evoluzione (arma al livello massimo + passiva + scrigno di un boss). */
@@ -54,6 +55,7 @@ function openChest(state: GameState, upgradeAbility: (a: any) => any, applyPassi
   const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type] && owned.has(EVOLUTIONS[a.type]!));
   if (evo) {
     evo.evolved = true;
+    evo.color = getEvolutionColor(evo.type) || evo.color;
     evo.damage *= 2.2;
     evo.cooldown = Math.max(0.05, evo.cooldown * 0.7);
     rewards.push({ kind: 'evolve', abilityType: evo.type });

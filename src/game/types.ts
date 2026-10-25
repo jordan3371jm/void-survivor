@@ -76,6 +76,8 @@ export interface Enemy extends Entity {
 
 export interface Projectile extends Entity {
   fromPlayer: boolean;
+  /** sparato da un'arma evoluta (piu' grande, alone dorato) */
+  evolved?: boolean;
   lifetime: number;
   maxLifetime: number;
   type: ProjectileType;
