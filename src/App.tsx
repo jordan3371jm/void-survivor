@@ -7,6 +7,7 @@ import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMu
 import { t, Language, languageNames } from './game/i18n';
 import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeAbilityAttack, getAbilityAttackBonus, applyDiamondUpgrade, getDiamondUpgradeCost, applyCoinUpgrade, getCoinUpgradeCost, getStatLevel, getStatMaxLevel, DiamondUpgradeType, CoinUpgradeType, addHighScore, createUserProfile, saveUserProfile } from './game/store';
 import { playgama } from './game/playgame';
+import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
 import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
@@ -368,6 +369,7 @@ export default function App() {
     const state = gameStateRef.current;
     if (runFinalizedRef.current || !state) return;
     runFinalizedRef.current = true;
+    trackRunEnd(state, state.victory ? 'victory' : state.gameOver ? 'death' : 'quit');
 
     const score = state.kills * 10 + Math.floor(state.time) * 5;
     let ns: GameStore = {
@@ -444,11 +446,14 @@ export default function App() {
         if (canvasSizeRef.current.w === 0) resizeCanvas();
         const { w, h, dpr } = canvasSizeRef.current;
         const settings = storeRef.current.settings;
-        const dt = Math.min(Math.max(0, (timestamp - lastTimeRef.current) / 1000), 0.05);
+        const rawMs = timestamp - lastTimeRef.current;
+        const dt = Math.min(Math.max(0, rawMs / 1000), 0.05);
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        if (!pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
+        const active = !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
+        if (active) { engine.updateGame(state, dt); trackFrame(state); }
+        trackPerfFrame(rawMs, active);
 
         if (state.chestPending && !chestShownRef.current) {
           chestShownRef.current = true;
@@ -564,6 +569,7 @@ export default function App() {
       setScreen('playing');
       setAudioPaused(false);
       startBackgroundMusic();
+      trackRunStart(mode);
       if (!s.settings.tutorialDone) { tutorialOpenRef.current = true; setShowTutorial(true); }
     } catch (error) {
       setGameLoadError(true);
@@ -669,7 +675,8 @@ export default function App() {
     setPausedState(!pausedRef.current);
   }, [setPausedState]);
 
-  const closeTutorial = useCallback(() => {
+  const closeTutorial = useCallback((completed: boolean = true, step: number = 0) => {
+    trackTutorial(completed, step);
     tutorialOpenRef.current = false;
     setShowTutorial(false);
     const current = storeRef.current;

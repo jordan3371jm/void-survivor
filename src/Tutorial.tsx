@@ -4,7 +4,7 @@ import { Language } from './game/i18n';
 
 const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
 
-interface TutorialProps { lang: Language; touch: boolean; onClose: () => void; }
+interface TutorialProps { lang: Language; touch: boolean; onClose: (completed: boolean, step: number) => void; }
 
 export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
   const [step, setStep] = useState(0);
@@ -53,7 +53,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
   return (
     <div className="vs-overlay vs-overlay--levelup">
       <div className="vs-modal vs-tutorial" style={{ ['--accent' as any]: s.color }}>
-        <button type="button" className="vs-tutorial-skip" onClick={onClose}>{L(lang, 'Salta tutorial', 'Skip tutorial', 'Saltar tutorial', 'Passer le tutoriel', '跳过教程')}<X size={15} /></button>
+        <button type="button" className="vs-tutorial-skip" onClick={() => onClose(false, step + 1)}>{L(lang, 'Salta tutorial', 'Skip tutorial', 'Saltar tutorial', 'Passer le tutoriel', '跳过教程')}<X size={15} /></button>
         <span className="vs-tutorial-kicker">{L(lang, 'Tutorial', 'Tutorial', 'Tutorial', 'Tutoriel', '教程')} · {step + 1}/{steps.length}</span>
         <div className="vs-tutorial-icon" key={step}>{s.icon}</div>
         <h2 className="vs-modal-title">{s.title}</h2>
@@ -61,7 +61,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
         <div className="vs-tutorial-dots">{steps.map((_, i) => <span key={i} className={i === step ? 'is-active' : ''} />)}</div>
         <div className="vs-tutorial-nav">
           <button type="button" className="vs-btn vs-btn--ghost" onClick={() => setStep(step - 1)} disabled={step === 0}><ChevronLeft size={18} />{L(lang, 'Indietro', 'Back', 'Atrás', 'Retour', '上一步')}</button>
-          <button type="button" className="vs-btn vs-btn--accent" onClick={() => (last ? onClose() : setStep(step + 1))}>
+          <button type="button" className="vs-btn vs-btn--accent" onClick={() => (last ? onClose(true, step + 1) : setStep(step + 1))}>
             {last ? L(lang, 'Gioca!', 'Play!', '¡Jugar!', 'Jouer !', '开始！') : L(lang, 'Avanti', 'Next', 'Siguiente', 'Suivant', '下一步')}<ChevronRight size={18} />
           </button>
         </div>
