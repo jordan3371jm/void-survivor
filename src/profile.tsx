@@ -157,16 +157,19 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
             entries === null ? <p className="vs-muted vs-center">{clean(t(lang, 'loading_leaderboard'))}</p>
             : entries.length === 0 ? <p className="vs-muted vs-center">{failed ? L(lang, 'Classifica non raggiungibile, riprova più tardi.', 'Leaderboard unreachable, try again later.', 'Clasificación no disponible, inténtalo más tarde.', 'Classement indisponible, réessaie plus tard.', '排行榜暂不可用，请稍后再试。') : L(lang, 'Nessun punteggio ancora: sii il primo!', 'No scores yet: be the first!', 'Aún no hay puntuaciones: ¡sé el primero!', 'Pas encore de scores : sois le premier !', '暂无分数：成为第一名！')}</p>
             : (
+              <>
+              <p className="vs-muted vs-small vs-center">{L(lang, 'I nomi degli altri piloti sono assegnati da Playgama.', 'Other pilots’ names are assigned by Playgama.', 'Los nombres de los demás pilotos los asigna Playgama.', 'Les noms des autres pilotes sont attribués par Playgama.', '其他飞行员的名字由Playgama分配。')}</p>
               <ol className="vs-rank-list">
                 {entries.slice(0, 50).map(e => (
                   <li key={e.id + e.rank} className={`vs-rank-row ${medal(e.rank)}${me.id && e.id === me.id ? ' is-me' : ''}`}>
                     <span className="vs-rank-pos">{e.rank}</span>
                     <Avatar value={e.photo} size={32} />
-                    <span className="vs-rank-name">{me.id && e.id === me.id ? myName : e.name}</span>
+                    <span className="vs-rank-name">{me.id && e.id === me.id ? <>{myName} <small className="vs-you">{L(lang, 'TU', 'YOU', 'TÚ', 'TOI', '你')}</small></> : e.name}</span>
                     <b className="vs-rank-score">{e.score}</b>
                   </li>
                 ))}
               </ol>
+              </>
             )
           ) : (
             <div className="vs-leader-info">
