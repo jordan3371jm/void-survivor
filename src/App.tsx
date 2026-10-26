@@ -224,26 +224,20 @@ export default function App() {
                 currentShip: userData.currentShip || currentStore.currentShip,
                 settings: { ...currentStore.settings, ...(userData.settings || {}) }
               };
-              const profile = createUserProfile(userEmail, userName, userAvatar);
-              profile.id = userId;
-              profile.highScores = userData.highScores || [];
+              // Mantiene il profilo locale (nome scelto, avatar, statistiche, obiettivi): prima veniva ricreato da zero
+              const base = currentStore.userProfile || createUserProfile(userEmail, userName, userAvatar);
+              const profile = { ...base, id: userId, highScores: (base.highScores && base.highScores.length ? base.highScores : userData.highScores) || [] };
               const newStore = saveUserProfile(mergedStore, profile);
               setStore(newStore);
             } else if (!currentStore.userProfile || currentStore.userProfile.id !== userId) {
-              const profile = createUserProfile(userEmail, userName, userAvatar);
-              profile.id = userId;
+              const profile = { ...(currentStore.userProfile || createUserProfile(userEmail, userName, userAvatar)), id: userId };
               const newStore = saveUserProfile(currentStore, profile);
               setStore(newStore);
               await auth.saveUserData(userId, newStore);
             }
-          } else {
-            const currentStore = loadStore();
-            if (currentStore.userProfile) {
-              const newStore = { ...currentStore, userProfile: null };
-              saveStore(newStore);
-              setStore(newStore);
-            }
           }
+          // Nessun utente collegato: il profilo locale resta com'e' (prima veniva cancellato a ogni avvio,
+          // per questo il nome scelto nel profilo non restava salvato)
         });
       } catch (error) {
         console.error('[App] Authentication could not be initialized:', error);
