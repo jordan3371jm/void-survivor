@@ -159,6 +159,10 @@ export default function App() {
   const reviveShownRef = useRef(false);
   const chestShownRef = useRef(false);
   const platformPausedRef = useRef(false); // pausa richiesta da Playgama
+  // Dopo la pubblicita' per rinascere: conto alla rovescia di 3 s, poi il gioco riparte da solo
+  const [reviveCountdown, setReviveCountdown] = useState(0);
+  const countdownRef = useRef(0);
+  const adGuardUntilRef = useRef(0); // ignora la pausa automatica causata dalla finestra della pubblicita'
   const joystickRef = useRef<{ active: boolean; id: number | null; startX: number; startY: number; currentX: number; currentY: number }>({
     active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0
   });
@@ -438,7 +442,7 @@ export default function App() {
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        if (!pausedRef.current && !tutorialOpenRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
+        if (!pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
 
         if (state.chestPending && !chestShownRef.current) {
           chestShownRef.current = true;
@@ -606,16 +610,35 @@ export default function App() {
   const handleRevive = useCallback(async () => {
     const state = gameStateRef.current;
     try {
+      adGuardUntilRef.current = Number.POSITIVE_INFINITY;
       const rewarded = await playgama.showRewarded('revive');
+      adGuardUntilRef.current = performance.now() + 1500;
       if (rewarded) {
         gameEngineRef.current?.revivePlayer(state);
         reviveShownRef.current = false;
         setRevivePending(false);
+        // la pubblicita' puo' aver messo in pausa il gioco: si riparte da soli dopo 3, 2, 1
+        pausedRef.current = false;
+        setPaused(false);
+        platformPausedRef.current = false;
+        resumeAudio();
+        setAudioPaused(false);
+        state.keys?.clear?.(); state.touchDir = null;
+        countdownRef.current = 3;
+        setReviveCountdown(3);
+        const tick = () => {
+          countdownRef.current -= 1;
+          setReviveCountdown(countdownRef.current);
+          if (countdownRef.current > 0) window.setTimeout(tick, 1000);
+          else { pausedRef.current = false; setPaused(false); platformPausedRef.current = false; }
+        };
+        window.setTimeout(tick, 1000);
         return;
       }
     } catch (error: any) {
       console.error('Errore revive ad:', error);
     }
+    adGuardUntilRef.current = performance.now() + 1500;
     state.revivePending = false;
     state.gameOver = true;
     setRevivePending(false);
@@ -636,7 +659,7 @@ export default function App() {
 
   const togglePause = useCallback(() => {
     const state = gameStateRef.current;
-    if (tutorialOpenRef.current || !state || state.gameOver || state.levelUpPending || state.revivePending) return;
+    if (tutorialOpenRef.current || countdownRef.current > 0 || !state || state.gameOver || state.levelUpPending || state.revivePending) return;
     setPausedState(!pausedRef.current);
   }, [setPausedState]);
 
@@ -730,7 +753,7 @@ export default function App() {
       if (document.hidden) {
         clearInput();
         const state = gameStateRef.current;
-        if (state && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current) setPausedState(true);
+        if (state && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current && countdownRef.current <= 0 && performance.now() > adGuardUntilRef.current) setPausedState(true);
       }
     };
 
@@ -1423,6 +1446,12 @@ export default function App() {
           </div>
         )}
 
+        {reviveCountdown > 0 && !gameOver && (
+          <div className="vs-countdown" aria-live="assertive">
+            <span className="vs-countdown-label">{L(lang, 'PREPARATI!', 'GET READY!', '¡PREPÁRATE!', 'PRÉPARE-TOI !', '准备！')}</span>
+            <span key={reviveCountdown} className="vs-countdown-num">{reviveCountdown}</span>
+          </div>
+        )}
         {revivePending && !gameOver && !levelUpPending && (
           <div className="vs-overlay">
             <div className="vs-modal vs-modal--game vs-tone-danger">
