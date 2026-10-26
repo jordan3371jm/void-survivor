@@ -159,6 +159,10 @@ export default function App() {
   const reviveShownRef = useRef(false);
   const chestShownRef = useRef(false);
   const platformPausedRef = useRef(false); // pausa richiesta da Playgama
+  // Dopo la pubblicita' per rinascere: conto alla rovescia di 3 s, poi il gioco riparte da solo
+  const [reviveCountdown, setReviveCountdown] = useState(0);
+  const countdownRef = useRef(0);
+  const adGuardUntilRef = useRef(0); // ignora la pausa automatica causata dalla finestra della pubblicita'
   const joystickRef = useRef<{ active: boolean; id: number | null; startX: number; startY: number; currentX: number; currentY: number }>({
     active: false, id: null, startX: 0, startY: 0, currentX: 0, currentY: 0
   });
@@ -181,6 +185,12 @@ export default function App() {
           if (enabled) { setSfxVolume(s.sfxVolume); setMusicVolume(s.musicVolume); }
           else { setSfxVolume(0); setMusicVolume(0); }
         });
+        // Checklist Playgama: la lingua si sceglie da sola da quella della piattaforma (finche' il giocatore non la cambia)
+        const pl = playgama.getLanguage();
+        const cur = storeRef.current;
+        if (pl && !cur.settings.languageChosen && (Object.keys(languageNames) as string[]).includes(pl) && cur.settings.language !== pl) {
+          commitStore({ ...cur, settings: { ...cur.settings, language: pl as Language } });
+        }
         playgama.sendGameReady();
       }
     }).catch((error: any) => {
@@ -224,26 +234,20 @@ export default function App() {
                 currentShip: userData.currentShip || currentStore.currentShip,
                 settings: { ...currentStore.settings, ...(userData.settings || {}) }
               };
-              const profile = createUserProfile(userEmail, userName, userAvatar);
-              profile.id = userId;
-              profile.highScores = userData.highScores || [];
+              // Mantiene il profilo locale (nome scelto, avatar, statistiche, obiettivi): prima veniva ricreato da zero
+              const base = currentStore.userProfile || createUserProfile(userEmail, userName, userAvatar);
+              const profile = { ...base, id: userId, highScores: (base.highScores && base.highScores.length ? base.highScores : userData.highScores) || [] };
               const newStore = saveUserProfile(mergedStore, profile);
               setStore(newStore);
             } else if (!currentStore.userProfile || currentStore.userProfile.id !== userId) {
-              const profile = createUserProfile(userEmail, userName, userAvatar);
-              profile.id = userId;
+              const profile = { ...(currentStore.userProfile || createUserProfile(userEmail, userName, userAvatar)), id: userId };
               const newStore = saveUserProfile(currentStore, profile);
               setStore(newStore);
               await auth.saveUserData(userId, newStore);
             }
-          } else {
-            const currentStore = loadStore();
-            if (currentStore.userProfile) {
-              const newStore = { ...currentStore, userProfile: null };
-              saveStore(newStore);
-              setStore(newStore);
-            }
           }
+          // Nessun utente collegato: il profilo locale resta com'e' (prima veniva cancellato a ogni avvio,
+          // per questo il nome scelto nel profilo non restava salvato)
         });
       } catch (error) {
         console.error('[App] Authentication could not be initialized:', error);
@@ -444,7 +448,7 @@ export default function App() {
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        if (!pausedRef.current && !tutorialOpenRef.current && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
+        if (!pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending) engine.updateGame(state, dt);
 
         if (state.chestPending && !chestShownRef.current) {
           chestShownRef.current = true;
@@ -612,16 +616,35 @@ export default function App() {
   const handleRevive = useCallback(async () => {
     const state = gameStateRef.current;
     try {
+      adGuardUntilRef.current = Number.POSITIVE_INFINITY;
       const rewarded = await playgama.showRewarded('revive');
+      adGuardUntilRef.current = performance.now() + 1500;
       if (rewarded) {
         gameEngineRef.current?.revivePlayer(state);
         reviveShownRef.current = false;
         setRevivePending(false);
+        // la pubblicita' puo' aver messo in pausa il gioco: si riparte da soli dopo 3, 2, 1
+        pausedRef.current = false;
+        setPaused(false);
+        platformPausedRef.current = false;
+        resumeAudio();
+        setAudioPaused(false);
+        state.keys?.clear?.(); state.touchDir = null;
+        countdownRef.current = 3;
+        setReviveCountdown(3);
+        const tick = () => {
+          countdownRef.current -= 1;
+          setReviveCountdown(countdownRef.current);
+          if (countdownRef.current > 0) window.setTimeout(tick, 1000);
+          else { pausedRef.current = false; setPaused(false); platformPausedRef.current = false; }
+        };
+        window.setTimeout(tick, 1000);
         return;
       }
     } catch (error: any) {
       console.error('Errore revive ad:', error);
     }
+    adGuardUntilRef.current = performance.now() + 1500;
     state.revivePending = false;
     state.gameOver = true;
     setRevivePending(false);
@@ -642,7 +665,7 @@ export default function App() {
 
   const togglePause = useCallback(() => {
     const state = gameStateRef.current;
-    if (tutorialOpenRef.current || !state || state.gameOver || state.levelUpPending || state.revivePending) return;
+    if (tutorialOpenRef.current || countdownRef.current > 0 || !state || state.gameOver || state.levelUpPending || state.revivePending) return;
     setPausedState(!pausedRef.current);
   }, [setPausedState]);
 
@@ -736,7 +759,7 @@ export default function App() {
       if (document.hidden) {
         clearInput();
         const state = gameStateRef.current;
-        if (state && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current) setPausedState(true);
+        if (state && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current && countdownRef.current <= 0 && performance.now() > adGuardUntilRef.current) setPausedState(true);
       }
     };
 
@@ -1259,7 +1282,7 @@ export default function App() {
               <h2 className="vs-panel-title"><Sparkles size={18} />{t(lang, 'language')}</h2>
               <div className="vs-lang-grid">
                 {(Object.keys(languageNames) as Language[]).map(l => (
-                  <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => updateSetting('language', l)}>
+                  <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}>
                     {languageNames[l]}
                   </button>
                 ))}
@@ -1429,6 +1452,12 @@ export default function App() {
           </div>
         )}
 
+        {reviveCountdown > 0 && !gameOver && (
+          <div className="vs-countdown" aria-live="assertive">
+            <span className="vs-countdown-label">{L(lang, 'PREPARATI!', 'GET READY!', '¡PREPÁRATE!', 'PRÉPARE-TOI !', '准备！')}</span>
+            <span key={reviveCountdown} className="vs-countdown-num">{reviveCountdown}</span>
+          </div>
+        )}
         {revivePending && !gameOver && !levelUpPending && (
           <div className="vs-overlay">
             <div className="vs-modal vs-modal--game vs-tone-danger">

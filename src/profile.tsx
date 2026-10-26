@@ -136,6 +136,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
     fetchGlobalLeaderboard().then(setEntries).catch(() => { setFailed(true); setEntries([]); });
   }, [kind]);
 
+  const myName = store.userProfile?.name && store.userProfile.name !== 'Giocatore Locale' ? store.userProfile.name : L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员');
   const personal = [...(store.userProfile?.highScores || [])].sort((a, b) => b.score - a.score).slice(0, 10);
   const medal = (r: number) => (r === 1 ? 'is-gold' : r === 2 ? 'is-silver' : r === 3 ? 'is-bronze' : '');
 
@@ -160,7 +161,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
                   <li key={e.id + e.rank} className={`vs-rank-row ${medal(e.rank)}${me.id && e.id === me.id ? ' is-me' : ''}`}>
                     <span className="vs-rank-pos">{e.rank}</span>
                     <Avatar value={e.photo} size={32} />
-                    <span className="vs-rank-name">{e.name}</span>
+                    <span className="vs-rank-name">{me.id && e.id === me.id ? myName : e.name}</span>
                     <b className="vs-rank-score">{e.score}</b>
                   </li>
                 ))}
@@ -189,7 +190,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
               <li key={h.date + '_' + i} className={`vs-rank-row ${medal(i + 1)}`}>
                 <span className="vs-rank-pos">{i + 1}</span>
                 <span className="vs-rank-name">
-                  {new Date(h.date).toLocaleDateString(lang === 'zh' ? 'zh-CN' : lang)}
+                  {myName} · {new Date(h.date).toLocaleDateString(lang === 'zh' ? 'zh-CN' : lang)}
                   <small>{int(h.kills)} {L(lang, 'nemici', 'enemies', 'enemigos', 'ennemis', '敌人')} · Lv {int(h.level)} · {fmtTime(h.time)}</small>
                 </span>
                 <b className="vs-rank-score">{int(h.score)}</b>
