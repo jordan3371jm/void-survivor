@@ -359,18 +359,18 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     swarm: { radius: 8, hp: 3 * timeMultiplier, speed: 150, expValue: 1, color: '#88ff88', pattern: 'swarm' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
     boss_xenomorph: { radius: 70, hp: 2300 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
-    boss_cthulhu: { radius: 90, hp: 10000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
+    boss_cthulhu: { radius: 90, hp: 6000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
     boss_borg_cube: { radius: 85, hp: 15000 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
-    boss_space_kraken: { radius: 95, hp: 18000 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
-    boss_galaxy_devourer: { radius: 100, hp: 21000 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
-    boss_void_emperor: { radius: 88, hp: 25000 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
-    boss_cosmic_horror: { radius: 92, hp: 31000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
+    boss_space_kraken: { radius: 95, hp: 20000 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
+    boss_galaxy_devourer: { radius: 100, hp: 30000 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
+    boss_void_emperor: { radius: 88, hp: 40000 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
+    boss_cosmic_horror: { radius: 92, hp: 50000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
   };
   const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
   // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
-  if (type.startsWith('boss_') && state.gameMode === 'boss_rush') { const i = state.bossRushIndex || 0; base.hp = 1400 * (1 + i * 0.5) * (1 + i * 0.06); }
+  if (type.startsWith('boss_') && state.gameMode === 'boss_rush') { const i = state.bossRushIndex || 0; base.hp = 1400 * (1 + i * 0.5) * (1 + i * 0.06) * (i >= 2 ? 1.15 : 1); }
   // Dall'ondata 5 in poi i nemici normali diventano sempre piu' resistenti (chi spara resta fragile)
   if (!type.startsWith('boss_') && base.pattern !== 'shoot' && state.wave >= 5) { const k = state.wave - 4; base.hp *= 1 + k * 0.1 + k * k * 0.012; }
   // Maledizione: nemici normali con piu' salute e velocita' (i boss non vengono modificati)
