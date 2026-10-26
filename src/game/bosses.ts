@@ -179,6 +179,63 @@ function predicted(state: GameState, t: number): Vector2 {
   return { x: state.player.pos.x + state.player.vel.x * t, y: state.player.pos.y + state.player.vel.y * t };
 }
 
+
+// ---------------------------------------------------------------------------
+// Mosse aggiuntive (boss 3-8). Ognuna ha un preavviso visibile e almeno un varco sicuro.
+// ---------------------------------------------------------------------------
+/** Muro che avanza: file di linee parallele che scattano una dopo l'altra, con un corridoio libero */
+function wallSweep(c: MoveCtx, style: HazardStyle, color: string, opts: { rows?: number; spacing?: number; delay?: number; width?: number; angle?: number } = {}) {
+  const rows = opts.rows ?? 9, spacing = opts.spacing ?? 120, delay = opts.delay ?? 0.16;
+  const a = opts.angle ?? (Math.random() < 0.5 ? 0 : Math.PI / 2); // direzione delle linee
+  const nx = -Math.sin(a), ny = Math.cos(a);
+  const p = c.state.player.pos; const half = Math.floor(rows / 2);
+  const gap = Math.floor(rnd(-half + 1, half - 1)); // corridoio largo due file
+  for (let k = -half; k <= half; k++) {
+    if (k === gap || k === gap + 1) continue;
+    const step = c.state.player.vel.x * nx + c.state.player.vel.y * ny > 0 ? k + half : half - k; // il muro arriva dal lato verso cui ti muovi
+    c.at(step * delay, () => lineStrike(c, p.x + nx * k * spacing, p.y + ny * k * spacing, a, 1700, opts.width ?? 58, 1.0, style, color, c.dmg * 1.15));
+  }
+  c.at(1.0 * c.tele, () => playShoot('boss_slam'));
+  return rows * delay + 1.3;
+}
+
+/** Croce di raggi che ruota lentamente intorno al boss (si schiva girandogli intorno o allontanandosi) */
+function rotatingCross(c: MoveCtx, n: number, style: HazardStyle, color: string, speed = 0.45, length = 850) {
+  const a = Math.random() * TAU; const dir = Math.random() < 0.5 ? 1 : -1;
+  c.ai.anchor = 3.6 * c.tele;
+  for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i * TAU) / n, telegraph: 1.2, active: 2.4, width: 32, length, dps: c.dmg * 1.3, style, color, sweep: dir * speed });
+  c.at(1.2 * c.tele, () => playShoot('boss_beam'));
+  return 3.7;
+}
+
+/** Scacchiera: prima esplodono le caselle "nere", poi le "bianche" (resta sempre una casella sicura) */
+function checkerboard(c: MoveCtx, style: HazardStyle, color: string, cell = 130) {
+  const p = { ...c.state.player.pos };
+  for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
+    const first = (i + j) % 2 === 0;
+    const x = p.x + i * cell, y = p.y + j * cell;
+    if (first) strikeZone(c, x, y, cell * 0.5, 1.1, style, color, { burst: c.dmg });
+    else c.at(1.3 * c.tele, () => strikeZone(c, x, y, cell * 0.5, 1.0, style, color, { burst: c.dmg }));
+  }
+  c.at(1.1 * c.tele, () => playShoot('boss_slam'));
+  c.at(2.3 * c.tele, () => playShoot('boss_slam'));
+  return 2.8;
+}
+
+/** Ondate di proiettili ad anello con un varco che ruota a ogni ondata */
+function gappedRings(c: MoveCtx, waves: number, count: number, speed: number, color: string) {
+  let gapA = c.aim() + Math.PI; const turn = (Math.random() < 0.5 ? 1 : -1) * 0.5;
+  for (let w = 0; w < waves; w++) c.at(w * 0.55, () => {
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * TAU;
+      if (Math.abs(Math.atan2(Math.sin(a - gapA), Math.cos(a - gapA))) < 0.45) continue; // varco
+      bullet(c.state, c.boss.pos.x, c.boss.pos.y, a, speed * c.speedMul, c.dmg * 0.5, color, 7);
+    }
+    gapA += turn; playShoot('boss_bolt');
+  });
+  return waves * 0.55 + 0.4;
+}
+
 // ---------------------------------------------------------------------------
 // I BOSS
 // ---------------------------------------------------------------------------
@@ -282,15 +339,18 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       return 2.6;
     } },
     { id: 'deep_spiral', weight: 2, run: c => { spiral(c, c.enraged ? 3 : 2, 1.8, 9, 190, 0.32, '#3cf0a0'); return 2.0; } },
+    // NUOVA: marea di tentacoli che avanza, con un corridoio libero
+    { id: 'tidal', weight: 2.5, run: c => wallSweep(c, 'tentacle', '#2bd48a') },
   ],
 
   // CUBO BORG: raggio traente, droni, griglia laser, adattamento
   boss_borg_cube: [
     { id: 'tractor', weight: 3, run: c => {
-      c.ai.anchor = 3.0 * c.tele;
-      beamFromBoss(c, { angle: c.aim(), telegraph: 0.7, active: 2.3, width: 96, length: 1100, dps: c.dmg * 0.7, style: 'tractor', color: '#4dff9a', trackActive: 0.4, pull: 120 });
-      c.at(0.7 * c.tele, () => playShoot('boss_beam'));
-      return 3.1;
+      // mira durante il preavviso, poi il raggio resta FERMO: basta spostarsi di lato
+      c.ai.anchor = 2.9 * c.tele;
+      beamFromBoss(c, { angle: c.aim(), telegraph: 1.1, active: 1.6, width: 90, length: 1100, dps: c.dmg * 0.9, style: 'tractor', color: '#4dff9a', trackTelegraph: true });
+      c.at(1.1 * c.tele, () => playShoot('boss_beam'));
+      return 3.0;
     } },
     { id: 'drones', weight: 2, run: c => { summon(c.state, c.boss, 'drone_sentinel', 4 + Math.floor(c.tier / 2)); playShoot('boss_charge'); return 0.8; } },
     { id: 'grid', weight: 3, run: c => {
@@ -309,6 +369,8 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       for (let i = 0; i < 6; i++) c.at(i * 0.7, () => { radialBurst(c, 16 + c.tier, 210, '#5cff8c', i * 0.2); playShoot('boss_bolt'); });
       return 4.5;
     } },
+    // NUOVA: croce di raggi da taglio che ruota lentamente
+    { id: 'cutting_cross', weight: 2.5, run: c => rotatingCross(c, 4, 'grid', '#5cff8c', 0.4) },
   ],
 
   // KRAKEN SPAZIALE: pioggia di tentacoli, inchiostro, gorgo, tentacoli rotanti
@@ -338,10 +400,13 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'sweep', weight: 2, run: c => {
       const a = c.aim(); const dir = Math.random() < 0.5 ? 1 : -1;
       const n = c.enraged ? 3 : 2;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a - dir * 1.0 + (i * TAU) / n, telegraph: 0.8, active: 1.7, width: 42, length: 560, dps: c.dmg * 1.4, style: 'tentacle', color: '#c45cff', sweep: dir * 1.0 });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a - dir * 1.0 + (i * TAU) / n, telegraph: 0.8, active: 1.7, width: 42, length: 560, dps: c.dmg * 1.4, style: 'tentacle', color: '#c45cff', sweep: dir * 0.7 });
       c.ai.anchor = 2.5 * c.tele;
       return 2.6;
     } },
+    // NUOVE: muro di inchiostro che avanza e anelli di bolle con un varco
+    { id: 'ink_wall', weight: 2.5, run: c => wallSweep(c, 'tentacle', '#c45cff', { angle: c.aim() + Math.PI / 2 }) },
+    { id: 'bubble_rings', weight: 2, run: c => gappedRings(c, c.enraged ? 6 : 4, 22, 190, '#d58cff') },
   ],
 
   // DIVORATORE DI GALASSIE: buco nero, braccia a spirale, raggi cosmici, pioggia di stelle
@@ -356,7 +421,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'cosmic_ray', weight: 2.5, run: c => {
       const n = c.enraged ? 4 : 2; const a = c.aim(); const dir = Math.random() < 0.5 ? 1 : -1;
       c.ai.anchor = 4.2 * c.tele;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i * TAU) / n + dir * 0.6, telegraph: 1.0, active: 3.0, width: 38, length: 950, dps: c.dmg * 1.6, style: 'cosmic', color: '#d9a3ff', sweep: dir * (0.75 + Math.min(c.tier, 8) * 0.02) });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i * TAU) / n + dir * 0.6, telegraph: 1.0, active: 3.0, width: 38, length: 950, dps: c.dmg * 1.6, style: 'cosmic', color: '#d9a3ff', sweep: dir * 0.42 });
       c.at(1.0 * c.tele, () => playShoot('boss_beam'));
       return 4.2;
     } },
@@ -369,6 +434,9 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       });
       return n * 0.12 + 0.9;
     } },
+    // NUOVE: croce gravitazionale rotante e pioggia di meteore a scacchiera
+    { id: 'gravity_cross', weight: 2.5, run: c => rotatingCross(c, 3, 'cosmic', '#d9a3ff', 0.4, 900) },
+    { id: 'meteor_grid', weight: 2.5, run: c => checkerboard(c, 'star', '#ffd76b') },
   ],
 
   // IMPERATORE DEL VUOTO: lance, nova oscura, giudizio a croce, teletrasporto
@@ -403,6 +471,19 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       if (c.enraged) c.at(0.9, () => radialBurst(c, 16 + c.tier, 240, '#ff7aff', Math.PI / (16 + c.tier)));
       return 1.4;
     } },
+    // NUOVE: scacchiera del vuoto, cloni d'ombra che caricano, sipario di lance (prima orizzontale poi verticale)
+    { id: 'void_grid', weight: 2.5, run: c => checkerboard(c, 'void', '#ff4dff', 135) },
+    { id: 'shadow_clones', weight: 2, run: c => {
+      dashAt(c, 0.9, 850);
+      c.at(1.5 * c.tele, () => dashAt(c, 0.75, 900));
+      c.at(3.0 * c.tele, () => dashAt(c, 0.75, 950));
+      return 4.3;
+    } },
+    { id: 'lance_curtain', weight: 2, run: c => {
+      wallSweep(c, 'void', '#ffb3ff', { angle: 0, rows: 7, spacing: 140, delay: 0.12 });
+      c.at(1.9, () => { wallSweep(c, 'void', '#ffb3ff', { angle: Math.PI / 2, rows: 7, spacing: 140, delay: 0.12 }); });
+      return 3.6;
+    } },
   ],
 
   // ORRORE COSMICO (boss finale): sguardi, squarci, tempesta di occhi, evocazioni + mosse degli altri boss
@@ -410,7 +491,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
     { id: 'gaze', weight: 3, run: c => {
       const n = c.enraged ? 4 : 3; const a = c.aim();
       c.ai.anchor = 3.4 * c.tele;
-      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i - (n - 1) / 2) * 0.7, telegraph: 1.0, active: 2.3, width: 26, length: 1200, dps: c.dmg * 1.3, style: 'gaze', color: '#ffe23d', trackActive: 0.32 });
+      for (let i = 0; i < n; i++) beamFromBoss(c, { angle: a + (i - (n - 1) / 2) * 0.7, telegraph: 1.0, active: 2.3, width: 26, length: 1200, dps: c.dmg * 1.3, style: 'gaze', color: '#ffe23d', trackTelegraph: true });
       c.at(1.0 * c.tele, () => playShoot('boss_beam'));
       return 3.4;
     } },
@@ -437,6 +518,10 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       playShoot('stellar_blackhole');
       return 2.6;
     } },
+    // NUOVE: corona di sguardi rotante, scacchiera dell'abisso, anelli di occhi con varco
+    { id: 'eye_crown', weight: 2.5, run: c => rotatingCross(c, 5, 'gaze', '#ffe23d', 0.35, 800) },
+    { id: 'abyss_grid', weight: 2.5, run: c => checkerboard(c, 'rift', '#ffef7a', 140) },
+    { id: 'eye_rings', weight: 2, run: c => gappedRings(c, c.enraged ? 7 : 5, 26, 200, '#ffd23d') },
   ],
 };
 
