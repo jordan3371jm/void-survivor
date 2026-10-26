@@ -76,6 +76,14 @@ class PlaygamaSDK {
     return this.initialized && !!this.bridge;
   }
 
+  /** Lingua del giocatore indicata dalla piattaforma (es. 'it', 'en'), se disponibile. */
+  getLanguage(): string | null {
+    try {
+      const l = this.bridge?.platform?.language;
+      return typeof l === 'string' && l ? l.slice(0, 2).toLowerCase() : null;
+    } catch { return null; }
+  }
+
   sendGameReady(): void {
     if (!this.isInitialized()) return;
 

@@ -1197,3 +1197,9 @@ svg { flex-shrink: 0; }
 .vs-countdown-label { font-family: var(--font-display); font-weight: 900; letter-spacing: 0.3em; font-size: clamp(1rem, 4vmin, 2rem); color: #34d399; text-shadow: 0 0 2vmin rgba(52, 211, 153, 0.8); }
 .vs-countdown-num { font-family: var(--font-display); font-weight: 900; font-size: clamp(5rem, 28vmin, 14rem); line-height: 1; color: #fff; text-shadow: 0 0 4vmin rgba(52, 211, 153, 0.9), 0 0.8vmin 0 #000; animation: vs-count-pop 1s ease-out both; }
 @keyframes vs-count-pop { 0% { transform: scale(1.8); opacity: 0; } 25% { transform: scale(1); opacity: 1; } 85% { opacity: 1; } 100% { transform: scale(0.85); opacity: 0.2; } }
+
+/* Checklist Playgama: su finestre molto larghe il gioco non supera il rapporto 2:1 (margini ai lati) */
+@media (min-aspect-ratio: 2/1) {
+  html, body { background: #000; }
+  .vs-game, .vs-screen { left: 50%; right: auto; width: 200vh; transform: translateX(-50%); }
+}

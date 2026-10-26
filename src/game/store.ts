@@ -88,6 +88,7 @@ export interface GameStore {
     adsWatchedForSpeed: number;
     speedBoostPaused: boolean;
     tutorialDone?: boolean;
+    languageChosen?: boolean;
   };
   ships: {
     starter: boolean;

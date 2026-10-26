@@ -185,6 +185,12 @@ export default function App() {
           if (enabled) { setSfxVolume(s.sfxVolume); setMusicVolume(s.musicVolume); }
           else { setSfxVolume(0); setMusicVolume(0); }
         });
+        // Checklist Playgama: la lingua si sceglie da sola da quella della piattaforma (finche' il giocatore non la cambia)
+        const pl = playgama.getLanguage();
+        const cur = storeRef.current;
+        if (pl && !cur.settings.languageChosen && (Object.keys(languageNames) as string[]).includes(pl) && cur.settings.language !== pl) {
+          commitStore({ ...cur, settings: { ...cur.settings, language: pl as Language } });
+        }
         playgama.sendGameReady();
       }
     }).catch((error: any) => {
@@ -1276,7 +1282,7 @@ export default function App() {
               <h2 className="vs-panel-title"><Sparkles size={18} />{t(lang, 'language')}</h2>
               <div className="vs-lang-grid">
                 {(Object.keys(languageNames) as Language[]).map(l => (
-                  <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => updateSetting('language', l)}>
+                  <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}>
                     {languageNames[l]}
                   </button>
                 ))}
