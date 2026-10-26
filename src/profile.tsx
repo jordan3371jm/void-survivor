@@ -71,10 +71,11 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ store, setStore, lan
           </label>
           <div className="vs-profile-id">
             {editing ? (
-              <form className="vs-row" onSubmit={e => { e.preventDefault(); saveName(); }}>
-                <input className="vs-input" value={name} maxLength={18} autoFocus onChange={e => setName(e.target.value)} placeholder={L(lang, 'Nome pilota', 'Pilot name', 'Nombre', 'Nom du pilote', '名字')} />
-                <button type="submit" className="vs-btn vs-btn--sm vs-btn--accent">OK</button>
-              </form>
+              // niente <form>: su Playgama il gioco gira in un iframe che blocca l'invio dei moduli (il clic su OK non arrivava)
+              <div className="vs-row">
+                <input className="vs-input" value={name} maxLength={18} autoFocus onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); saveName(); } }} placeholder={L(lang, 'Nome pilota', 'Pilot name', 'Nombre', 'Nom du pilote', '名字')} />
+                <button type="button" className="vs-btn vs-btn--sm vs-btn--accent" onClick={saveName}>OK</button>
+              </div>
             ) : (
               <button type="button" className="vs-pf-name" onClick={() => setEditing(true)}>{profile.name === 'Giocatore Locale' ? L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员') : profile.name}<Pencil size={14} /></button>
             )}
