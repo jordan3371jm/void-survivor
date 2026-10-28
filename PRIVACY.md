@@ -42,10 +42,10 @@ We may update this policy from time to time. Changes will be posted on this page
 
 ## Contact
 
-If you have any questions about this Privacy Policy, contact us at: **CONTACT_EMAIL**
+If you have any questions about this Privacy Policy, contact us at: **jmlcompilation3371@gmail.com**
 
 ---
 
 # Informativa sulla privacy (Italiano)
 
-**Void Survivors non raccoglie dati personali.** I progressi di gioco restano solo sul tuo dispositivo. Le pubblicità sono fornite da **Google AdMob**, che può raccogliere automaticamente l'ID pubblicitario del dispositivo, l'indirizzo IP, il paese e informazioni tecniche sul dispositivo per mostrare e misurare gli annunci, secondo l'informativa di Google (https://policies.google.com/privacy). Puoi disattivare gli annunci personalizzati dalle impostazioni del telefono (Impostazioni → Google → Annunci). Le pubblicità con premio sono sempre facoltative. Per domande: **CONTACT_EMAIL**
+**Void Survivors non raccoglie dati personali.** I progressi di gioco restano solo sul tuo dispositivo. Le pubblicità sono fornite da **Google AdMob**, che può raccogliere automaticamente l'ID pubblicitario del dispositivo, l'indirizzo IP, il paese e informazioni tecniche sul dispositivo per mostrare e misurare gli annunci, secondo l'informativa di Google (https://policies.google.com/privacy). Puoi disattivare gli annunci personalizzati dalle impostazioni del telefono (Impostazioni → Google → Annunci). Le pubblicità con premio sono sempre facoltative. Per domande: **jmlcompilation3371@gmail.com**
