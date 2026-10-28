@@ -20,7 +20,14 @@
     <link rel="preload" as="image" href="./assets/bg_nebula.webp" type="image/webp" />
 
     <!-- Playgama Bridge: caricato in modo asincrono, il gioco lo attende da solo (playgame.ts) -->
-    <script async src="https://bridge.playgama.com/v2/stable/playgama-bridge.js" onerror="window.__bridgeFailed = true"></script>
+    <script>
+      // Nell'app Android/iOS (Capacitor) Playgama non serve: lo script si carica solo sul web
+      (function () {
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) { window.__bridgeFailed = true; return; }
+        var s = document.createElement('script'); s.async = true; s.src = 'https://bridge.playgama.com/v2/stable/playgama-bridge.js';
+        s.onerror = function () { window.__bridgeFailed = true; }; document.head.appendChild(s);
+      })();
+    </script>
 
     <style>
       @font-face { font-family: "Orbitron"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("./fonts/orbitron-latin.woff2") format("woff2"); }
@@ -37,7 +44,7 @@
       #vs-splash .b i { display: block; width: 40%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #22d3ee, #a855f7); animation: vs-load 1.1s ease-in-out infinite; }
       @keyframes vs-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
     </style>
-    <script type="module" crossorigin src="./assets/index-CiL-pHJl.js"></script>
+    <script type="module" crossorigin src="./assets/index-BN3l5Vzn.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/react-BsclO1-R.js">
     <link rel="stylesheet" crossorigin href="./assets/index-jCPzASDt.css">
   </head>
