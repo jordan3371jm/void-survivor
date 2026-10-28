@@ -2,14 +2,15 @@
 // Pubblicita' nell'app Android/iOS (Capacitor + Google AdMob).
 // Sul web (Playgama) questo file non viene mai caricato.
 // ---------------------------------------------------------------------------
-import { AdMob, RewardAdPluginEvents } from '@capacitor-community/admob';
+import { AdMob, AdmobConsentStatus, RewardAdPluginEvents } from '@capacitor-community/admob';
 
-// ID degli annunci: ora sono quelli DI PROVA di Google (mostrano annunci finti).
-// Prima di pubblicare su Google Play vanno sostituiti con gli ID del tuo account AdMob.
+// ID delle unita' pubblicitarie AdMob di Void Survivors.
+// VITE_ADS_TEST=1 (build di prova) mostra annunci di prova anche con gli ID veri: cliccare annunci
+// veri durante i test e' vietato da AdMob. Il build per Google Play usa gli annunci veri.
 export const ADMOB_IDS = {
-  rewarded: 'ca-app-pub-3940256099942544/5224354917',
-  interstitial: 'ca-app-pub-3940256099942544/1033173712',
-  testing: true,
+  rewarded: 'ca-app-pub-1504660966518611/4123480705',
+  interstitial: 'ca-app-pub-1504660966518611/1581077847',
+  testing: import.meta.env.VITE_ADS_TEST === '1',
 };
 
 let ready = false;
@@ -17,6 +18,11 @@ let ready = false;
 export async function initNativeAds(): Promise<void> {
   if (ready) return;
   await AdMob.initialize({ initializeForTesting: ADMOB_IDS.testing });
+  // Consenso privacy (obbligatorio per gli utenti dell'Unione Europea): il modulo di Google appare solo se serve
+  try {
+    const info = await AdMob.requestConsentInfo();
+    if (info.isConsentFormAvailable && info.status === AdmobConsentStatus.REQUIRED) await AdMob.showConsentForm();
+  } catch (e) { console.warn('[AdMob] consenso non disponibile', e); }
   ready = true;
 }
 

@@ -9,8 +9,8 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- ID dell'app AdMob: ora e' quello DI PROVA di Google, va sostituito con il tuo prima della pubblicazione -->
-        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713"/>
+        <!-- ID dell app AdMob di Void Survivors -->
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-1504660966518611~3059092300"/>
 
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation"
