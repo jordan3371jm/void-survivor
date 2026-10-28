@@ -39,7 +39,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
     {
       icon: <Gift size={40} />, color: '#fbbf24',
       title: L(lang, 'Scrigni ed evoluzioni', 'Chests and evolutions', 'Cofres y evoluciones', 'Coffres et évolutions', '宝箱与进化'),
-      text: L(lang, 'Ogni boss lascia uno scrigno. Un’arma al livello massimo + la sua passiva abbinata si evolve in un’arma leggendaria, come le Spade Laser Jedi o i Siluri Fotonici!', 'Every boss drops a chest. A max-level weapon + its matching passive evolves into a legendary weapon, like Jedi Lightsabers or Photon Torpedoes!', 'Cada jefe suelta un cofre. Un arma a nivel máximo + su pasiva evoluciona en un arma legendaria, ¡como los Sables de Luz Jedi o los Torpedos de Fotones!', 'Chaque boss lâche un coffre. Une arme au niveau max + son passif associé évolue en arme légendaire, comme les Sabres Laser Jedi ou les Torpilles à Photons !', '每个Boss都会掉落宝箱。满级武器+对应被动将进化为传奇武器，例如绝地光剑或光子鱼雷！'),
+      text: L(lang, 'Ogni boss lascia uno scrigno. Un’arma al livello massimo + la sua passiva abbinata si evolve in un’arma leggendaria, come i Siluri Fotonici o i Siluri Protonici!', 'Every boss drops a chest. A max-level weapon + its matching passive evolves into a legendary weapon, like Photon or Proton Torpedoes!', 'Cada jefe suelta un cofre. Un arma a nivel máximo + su pasiva evoluciona en un arma legendaria, ¡como los Torpedos de Fotones o de Protones!', 'Chaque boss lâche un coffre. Une arme au niveau max + son passif associé évolue en arme légendaire, comme les Torpilles à Photons ou à Protons !', '每个Boss都会掉落宝箱。满级武器+对应被动将进化为传奇武器，例如光子鱼雷或质子鱼雷！'),
     },
     {
       icon: <ShoppingCart size={40} />, color: '#38bdf8',

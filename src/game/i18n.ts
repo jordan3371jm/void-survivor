@@ -1,3 +1,4 @@
+import { appText } from './appNames';
 export type Language = 'it' | 'en' | 'es' | 'fr' | 'zh';
 
 export const translations: Record<Language, Record<string, string>> = {
@@ -548,6 +549,7 @@ for (const l of Object.keys(missingTranslations) as Language[]) {
 }
 
 export function t(lang: Language, key: string): string {
+  const app = appText(key, lang); if (app) return app;
   return translations[lang]?.[key] || translations.en[key] || key;
 }
 
