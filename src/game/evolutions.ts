@@ -1,5 +1,6 @@
 // Nomi e colori delle armi evolute, ispirati all'universo e ai grandi film di fantascienza.
 import type { AbilityType } from './types';
+import { appEvoName } from './appNames';
 import type { Language } from './i18n';
 
 type Names = [it: string, en: string, es: string, fr: string, zh: string];
@@ -34,6 +35,7 @@ export const EVOLUTION_INFO: Partial<Record<AbilityType, Evo>> = {
 const IDX: Record<string, number> = { it: 0, en: 1, es: 2, fr: 3, zh: 4 };
 
 export function getEvolutionName(type: AbilityType, lang: Language | string): string | null {
+  const app = appEvoName(type, lang); if (app) return app;
   const e = EVOLUTION_INFO[type];
   return e ? e.names[IDX[lang] ?? 1] : null;
 }

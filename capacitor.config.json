@@ -1,0 +1,11 @@
+{
+  "appId": "com.jordan3371.voidsurvivors",
+  "appName": "Void Survivors",
+  "webDir": "dist-app",
+  "android": {
+    "backgroundColor": "#05060f"
+  },
+  "plugins": {
+    "AdMob": {}
+  }
+}

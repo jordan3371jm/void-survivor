@@ -7,15 +7,20 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:android": "vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^7.2.0",
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "firebase": "^12.3.0",
     "lucide-react": "^0.545.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.6.9",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",
