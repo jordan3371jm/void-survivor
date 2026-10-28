@@ -9,3 +9,5 @@ __art.html
 public/__tmp/
 __key.html
 __vid.html
+*.apk
+*.aab
