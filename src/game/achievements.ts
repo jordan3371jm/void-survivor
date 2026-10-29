@@ -650,7 +650,8 @@ export function getDifficultyName(difficulty: AchievementDifficulty, lang: strin
     en: { S: 'LEGENDARY', A: 'EPIC', B: 'HARD', C: 'MEDIUM', D: 'EASY' },
     es: { S: 'LEGENDARIO', A: 'ÉPICO', B: 'DIFÍCIL', C: 'MEDIO', D: 'FÁCIL' },
     fr: { S: 'LÉGENDAIRE', A: 'ÉPIQUE', B: 'DIFFICILE', C: 'MOYEN', D: 'FACILE' },
-    zh: { S: '传奇', A: '史诗', B: '困难', C: '中等', D: '简单' }
+    zh: { S: '传奇', A: '史诗', B: '困难', C: '中等', D: '简单' },
+    pl: { S: 'LEGENDARNE', A: 'EPICKIE', B: 'TRUDNE', C: 'ŚREDNIE', D: 'ŁATWE' }
   };
   return names[lang]?.[difficulty] || names.en[difficulty];
 }

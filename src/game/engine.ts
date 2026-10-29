@@ -1,4 +1,5 @@
 import { appBossName, isApp } from './appNames';
+import { plFromEn } from './pl';
 import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, Ability, AbilityType, LevelUpChoice, Vector2, EnemyType, ShipType, DamageNumber, GameMode } from './types';
 import { playShoot, playPassiveSound, playHit } from './audio';
 import { getAbilityInfo } from './abilityInfo';
@@ -1593,7 +1594,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
   const compact = width < 768 || height < 500;
   const s = compact ? 0.82 : 1.05;
   const m = 12 * s;
-  const L = (it: string, en: string, es: string, fr: string, zh: string) => lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : en;
+  const L = (it: string, en: string, es: string, fr: string, zh: string) => lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : lang === 'pl' ? plFromEn(en) : en;
 
   // Bordo rosso quando la vita e' bassa
   const hpRatio = player.maxHp > 0 ? player.hp / player.maxHp : 0;
@@ -1671,7 +1672,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       const bh = 12 * s;
       const bX = (width - bw) / 2;
       const bY = Math.max(m + panelH, fitsTop ? 0 : tY + tH) + 26 * s;
-      const name = state.currentBossType ? (lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : lang === 'zh' ? getBossNameZH(state.currentBossType) : getBossNameEN(state.currentBossType)) : 'BOSS';
+      const name = state.currentBossType ? (lang === 'pl' ? plFromEn(getBossNameEN(state.currentBossType)) : lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : lang === 'zh' ? getBossNameZH(state.currentBossType) : getBossNameEN(state.currentBossType)) : 'BOSS';
       ctx.textAlign = 'center'; ctx.font = `800 ${11 * s}px ${HUD_FONT}`;
       ctx.fillStyle = Math.sin(state.time * 5) > 0 ? '#ff5577' : '#ffb4c2';
       ctx.fillText(`⚠ ${name} ⚠`, width / 2, bY - 9 * s);
@@ -1738,7 +1739,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
   // Avviso di evento (sciame o mini boss)
   const ev = (state as any).eventBanner as { text: string; t: number } | null;
   if (ev && !(state.currentBossType && state.bossNameTimer > 0)) {
-    const L5 = (it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh } as any)[lang] || en;
+    const L5 = (it: string, en: string, es: string, fr: string, zh: string) => lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as any)[lang] || en;
     const MINI: Record<string, string> = {
       mini_sentinel: L5('SENTINELLA', 'SENTINEL', 'CENTINELA', 'SENTINELLE', '哨兵'), mini_hunter: L5('CACCIATORE', 'HUNTER', 'CAZADOR', 'CHASSEUR', '猎手'),
       mini_warden: L5('GUARDIANO', 'WARDEN', 'GUARDIÁN', 'GARDIEN', '守望者'), mini_reaper: L5('MIETITORE', 'REAPER', 'SEGADOR', 'FAUCHEUR', '收割者'),
@@ -1759,7 +1760,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
   }
   if (state.currentBossType && state.bossNameTimer > 0) {
     const alpha = Math.min(1, state.bossNameTimer);
-    const bossName = lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'en' ? getBossNameEN(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : getBossNameZH(state.currentBossType);
+    const bossName = lang === 'pl' ? plFromEn(getBossNameEN(state.currentBossType)) : lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'en' ? getBossNameEN(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : getBossNameZH(state.currentBossType);
     ctx.save(); ctx.globalAlpha = alpha;
     // su schermi stretti il titolo del boss viene rimpicciolito per non uscire dallo schermo
     const introScale = Math.min(1, width / 760);

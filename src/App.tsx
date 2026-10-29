@@ -5,6 +5,7 @@ import { getEvolutionName } from './game/evolutions';
 import { getAbilityInfo } from './game/abilityInfo';
 import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, stopBackgroundMusic, setAudioPaused } from './game/audio';
 import { t, Language, languageNames } from './game/i18n';
+import { plFromEn } from './game/pl';
 import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeAbilityAttack, getAbilityAttackBonus, applyDiamondUpgrade, getDiamondUpgradeCost, applyCoinUpgrade, getCoinUpgradeCost, getStatLevel, getStatMaxLevel, DiamondUpgradeType, CoinUpgradeType, addHighScore, createUserProfile, saveUserProfile } from './game/store';
 import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
@@ -66,7 +67,7 @@ const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_platin
 
 /** Testi brevi non presenti nel file delle traduzioni. */
 function L(lang: Language, it: string, en: string, es: string, fr: string, zh: string): string {
-  return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : en;
+  return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : lang === 'pl' ? plFromEn(en) : en;
 }
 
 /** Rimuove emoji iniziali/finali dalle traduzioni (al loro posto usiamo icone coerenti). */
@@ -924,7 +925,7 @@ export default function App() {
                 ) : (
                   <span className="vs-mode-progress">
                     <span className="vs-mode-progress-label">
-                      {L(lang, `Sblocca all'ondata ${m.need}`, `Unlock at wave ${m.need}`, `Desbloquear en la oleada ${m.need}`, `Débloquer à la vague ${m.need}`, `第${m.need}波解锁`)}
+                      {lang === 'pl' ? `Odblokuj na fali ${m.need}` : L(lang, `Sblocca all'ondata ${m.need}`, `Unlock at wave ${m.need}`, `Desbloquear en la oleada ${m.need}`, `Débloquer à la vague ${m.need}`, `第${m.need}波解锁`)}
                       <b>{Math.min(maxWaveReached, m.need)}/{m.need}</b>
                     </span>
                     <span className="vs-progress"><span style={{ width: `${Math.min(100, (maxWaveReached / m.need) * 100)}%` }} /></span>

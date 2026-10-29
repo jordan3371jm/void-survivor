@@ -1,5 +1,6 @@
 import { appText } from './appNames';
-export type Language = 'it' | 'en' | 'es' | 'fr' | 'zh';
+import { PL_TEXTS } from './pl';
+export type Language = 'it' | 'en' | 'es' | 'fr' | 'zh' | 'pl';
 
 export const translations: Record<Language, Record<string, string>> = {
   it: {
@@ -505,6 +506,7 @@ export const translations: Record<Language, Record<string, string>> = {
     achievement_speed_x2_24h: '神圣速度玩家', achievement_speed_x2_24h_desc: '累计24小时x2速度',
     achievement_wave_40: '第40波', achievement_wave_40_desc: '在一局游戏中达到第40波',
     achievement_total_playtime_100h: '永恒传奇', achievement_total_playtime_100h_desc: '总共玩100小时' },
+  pl: PL_TEXTS,
 };
 
 // Testi che mancavano in alcune lingue (prima comparivano come chiavi, es. "login_streak")
@@ -555,6 +557,7 @@ const themeTexts: Record<Language, Record<string, string>> = {
   es: { theme: 'Tema', theme_auto: 'Automático', theme_light: 'Claro', theme_dark: 'Oscuro' },
   fr: { theme: 'Thème', theme_auto: 'Automatique', theme_light: 'Clair', theme_dark: 'Sombre' },
   zh: { theme: '主题', theme_auto: '自动', theme_light: '浅色', theme_dark: '深色' },
+  pl: {},
 };
 for (const l of Object.keys(themeTexts) as Language[]) {
   translations[l] = { ...themeTexts[l], ...translations[l] };
@@ -566,9 +569,9 @@ export function t(lang: Language, key: string): string {
 }
 
 export const languageNames: Record<Language, string> = {
-  it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', zh: '中文',
+  it: 'Italiano', en: 'English', es: 'Español', fr: 'Français', zh: '中文', pl: 'Polski',
 };
 
 export const languageFlags: Record<Language, string> = {
-  it: '🇮🇹', en: '🇬🇧', es: '🇪🇸', fr: '🇫🇷', zh: '🇨🇳',
+  it: '🇮🇹', en: '🇬🇧', es: '🇪🇸', fr: '🇫🇷', zh: '🇨🇳', pl: '🇵🇱',
 };

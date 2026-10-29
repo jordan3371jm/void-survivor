@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Award, Camera, Clock, Crown, ExternalLink, Gamepad2, Globe, Pencil, Skull, Star, Swords, Trophy, User, Waves, X } from 'lucide-react';
 import { GameStore, createUserProfile, saveUserProfile } from './game/store';
 import { t, Language } from './game/i18n';
+import { plFromEn } from './game/pl';
+import { isKlyo } from './game/klyo';
 import { getAbilityInfo } from './game/abilityInfo';
 import { AbilityIcon } from './components/abilityIcon';
 import { authorizePlatformPlayer, fetchGlobalLeaderboard, getLeaderboardKind, getPlatformPlayer, GlobalEntry, showNativeLeaderboard } from './game/bridge';
 
-const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 const clean = (s: string) => s.replace(/^[\p{Extended_Pictographic}️☀-➿\s]+/u, '').replace(/[\s\p{Extended_Pictographic}️☀-➿]+$/u, '').trim();
 const int = (n: number | undefined) => String(Math.round(n || 0));
 const fmtTime = (s: number) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`; };
@@ -158,7 +160,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
             : entries.length === 0 ? <p className="vs-muted vs-center">{failed ? L(lang, 'Classifica non raggiungibile, riprova più tardi.', 'Leaderboard unreachable, try again later.', 'Clasificación no disponible, inténtalo más tarde.', 'Classement indisponible, réessaie plus tard.', '排行榜暂不可用，请稍后再试。') : L(lang, 'Nessun punteggio ancora: sii il primo!', 'No scores yet: be the first!', 'Aún no hay puntuaciones: ¡sé el primero!', 'Pas encore de scores : sois le premier !', '暂无分数：成为第一名！')}</p>
             : (
               <>
-              <p className="vs-muted vs-small vs-center">{L(lang, 'I nomi degli altri piloti sono assegnati da Playgama.', 'Other pilots’ names are assigned by Playgama.', 'Los nombres de los demás pilotos los asigna Playgama.', 'Les noms des autres pilotes sont attribués par Playgama.', '其他飞行员的名字由Playgama分配。')}</p>
+              {!isKlyo && <p className="vs-muted vs-small vs-center">{L(lang, 'I nomi degli altri piloti sono assegnati da Playgama.', 'Other pilots’ names are assigned by Playgama.', 'Los nombres de los demás pilotos los asigna Playgama.', 'Les noms des autres pilotes sont attribués par Playgama.', '其他飞行员的名字由Playgama分配。')}</p>}
               <ol className="vs-rank-list">
                 {entries.slice(0, 50).map(e => (
                   <li key={e.id + e.rank} className={`vs-rank-row ${medal(e.rank)}${me.id && e.id === me.id ? ' is-me' : ''}`}>

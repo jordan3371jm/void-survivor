@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Crosshair, Crown, Gem, Gift, Move, ShoppingCart, Sparkles, X } from 'lucide-react';
 import { Language } from './game/i18n';
+import { plFromEn } from './game/pl';
 
-const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 
 interface TutorialProps { lang: Language; touch: boolean; onClose: (completed: boolean, step: number) => void; }
 
