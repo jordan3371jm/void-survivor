@@ -21,9 +21,8 @@
 
     <!-- Playgama Bridge: caricato in modo asincrono, il gioco lo attende da solo (playgame.ts) -->
     <script>
-      // Nell'app Android/iOS (Capacitor) e nella build per Klyo Games Playgama non serve
+      // Nell'app Android/iOS (Capacitor) Playgama non serve: lo script si carica solo sul web (la build per Klyo lo toglie)
       (function () {
-        if ('%VITE_TARGET%' === 'klyo') { window.__bridgeFailed = true; return; }
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) { window.__bridgeFailed = true; return; }
         var s = document.createElement('script'); s.async = true; s.src = 'https://bridge.playgama.com/v2/stable/playgama-bridge.js';
         s.onerror = function () { window.__bridgeFailed = true; }; document.head.appendChild(s);
@@ -45,7 +44,7 @@
       #vs-splash .b i { display: block; width: 40%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #22d3ee, #a855f7); animation: vs-load 1.1s ease-in-out infinite; }
       @keyframes vs-load { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
     </style>
-    <script type="module" crossorigin src="./assets/index-DbllQoaw.js"></script>
+    <script type="module" crossorigin src="./assets/index-XBASkFfl.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/react-BsclO1-R.js">
     <link rel="stylesheet" crossorigin href="./assets/index-DxSoMLhE.css">
   </head>

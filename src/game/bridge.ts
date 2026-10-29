@@ -1,4 +1,5 @@
 import { storageGetItem, storageSetItem, loadStorageKeys } from './storage';
+import { isKlyo, klyoSdk } from './klyo';
 // Bridge SaaS - Backend ufficiale Playgama
 
 const LEADERBOARD_ID = 'void-survivor.scores';
@@ -247,11 +248,19 @@ export type LeaderboardKind = 'in_game' | 'native' | 'native_popup' | 'not_avail
 export interface GlobalEntry { id: string; name: string; photo?: string; score: number; rank: number; }
 
 export function getLeaderboardKind(): LeaderboardKind {
+  if (isKlyo) return klyoSdk()?.leaderboard?.get ? 'in_game' : 'not_available';
   const type = (window as any).bridge?.leaderboards?.type;
   return type === 'in_game' || type === 'native' || type === 'native_popup' ? type : 'not_available';
 }
 
 export async function fetchGlobalLeaderboard(): Promise<GlobalEntry[]> {
+  if (isKlyo) {
+    // Classifica Klyo di sempre (20 migliori)
+    const k = klyoSdk();
+    if (!k?.leaderboard?.get) return [];
+    const t: any = await new Promise((resolve) => k.leaderboard.get('all', resolve));
+    return (t?.entries || []).map((e: any, i: number) => ({ id: String(e.who ?? i), name: e.name || 'Player', score: Math.round(Number(e.score) || 0), rank: i + 1 }));
+  }
   const bridge = (window as any).bridge;
   if (getLeaderboardKind() !== 'in_game' || !bridge?.leaderboards?.getEntries) return [];
   const entries = await bridge.leaderboards.getEntries(LEADERBOARD_ID);

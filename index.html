@@ -21,9 +21,8 @@
 
     <!-- Playgama Bridge: caricato in modo asincrono, il gioco lo attende da solo (playgame.ts) -->
     <script>
-      // Nell'app Android/iOS (Capacitor) e nella build per Klyo Games Playgama non serve
+      // Nell'app Android/iOS (Capacitor) Playgama non serve: lo script si carica solo sul web (la build per Klyo lo toglie)
       (function () {
-        if ('%VITE_TARGET%' === 'klyo') { window.__bridgeFailed = true; return; }
         if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) { window.__bridgeFailed = true; return; }
         var s = document.createElement('script'); s.async = true; s.src = 'https://bridge.playgama.com/v2/stable/playgama-bridge.js';
         s.onerror = function () { window.__bridgeFailed = true; }; document.head.appendChild(s);

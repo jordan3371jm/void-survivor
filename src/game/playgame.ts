@@ -2,6 +2,7 @@
 // Documentazione: https://wiki.playgama.com/playgama/bridge-sdk
 
 import { Capacitor } from '@capacitor/core';
+import { isKlyo, klyoSdk } from './klyo';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
@@ -22,6 +23,7 @@ class PlaygamaSDK {
     if (this.initialized) return;
     // Nell'app non c'e' Playgama: le pubblicita' passano da AdMob
     if (isNativeApp()) { import('./nativeAds').then(m => m.initNativeAds()).catch(e => console.warn('[AdMob]', e)); return; }
+    if (isKlyo) { await this.initKlyo(); return; }
 
     let attempts = 0;
     const maxAttempts = 100; // 5 secondi al massimo
@@ -48,6 +50,17 @@ class PlaygamaSDK {
     } catch (error) {
       console.error('[Playgama] Errore inizializzazione:', error);
     }
+  }
+
+  // Klyo Games: il kit (klyo-gry-sdk.js) e' il primo script della pagina, qui lo si attende soltanto
+  private klyo: any = null;
+  private async initKlyo(): Promise<void> {
+    for (let i = 0; i < 100 && !klyoSdk(); i++) await new Promise(resolve => setTimeout(resolve, 50));
+    this.klyo = klyoSdk();
+    if (!this.klyo) { console.warn('[Klyo] kit non trovato'); return; }
+    this.initialized = true;
+    // la pagina di Klyo puo' chiedere il silenzio (finestra piccola)
+    try { this.klyo.onSound?.((on: boolean) => this.audioListeners.forEach(cb => cb(on !== false))); } catch { /* ignora */ }
   }
 
   // Eventi della piattaforma: pausa (tab in background, pubblicita', ecc.) e audio on/off.
@@ -80,7 +93,7 @@ class PlaygamaSDK {
   }
 
   isInitialized(): boolean {
-    return this.initialized && !!this.bridge;
+    return this.initialized && (!!this.bridge || !!this.klyo);
   }
 
   /** Lingua del giocatore indicata dalla piattaforma (es. 'it', 'en'), se disponibile. */
@@ -93,6 +106,15 @@ class PlaygamaSDK {
 
   sendGameReady(): void {
     if (!this.isInitialized()) return;
+    if (this.klyo) {
+      try {
+        this.klyo.ready();
+        // pulsante della pagina per registrare una clip del gioco
+        const canvas = document.querySelector('canvas.vs-game-canvas');
+        if (canvas && this.klyo.canvas) this.klyo.canvas(canvas);
+      } catch (error) { console.error('[Klyo] Errore ready:', error); }
+      return;
+    }
 
     try {
       this.bridge.platform.sendMessage('game_ready');
@@ -103,6 +125,11 @@ class PlaygamaSDK {
 
   async showInterstitial(placement: string = 'game_over'): Promise<void> {
     if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeInterstitial(); }
+    if (this.klyo) {
+      // pausa pubblicitaria scelta dal gioco: Klyo decide se e cosa mostrare
+      if (!this.klyo.adBreak) return;
+      return new Promise<void>((resolve) => { try { this.klyo.adBreak('after-loss', () => resolve()); } catch { resolve(); } });
+    }
     if (!this.isInitialized() || !this.bridge.advertisement) return;
 
     try {
@@ -115,6 +142,7 @@ class PlaygamaSDK {
 
   async showRewarded(placement: string = 'extra_life'): Promise<boolean> {
     if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeRewarded(); }
+    if (this.klyo) return false;
     if (!this.isInitialized() || !this.bridge.advertisement) return false;
 
     return new Promise((resolve) => {
@@ -171,11 +199,14 @@ class PlaygamaSDK {
 
   isInterstitialSupported(): boolean {
     if (isNativeApp()) return true;
+    if (this.klyo) return !!this.klyo.adBreak;
     return this.isInitialized() && !!this.bridge.advertisement?.isInterstitialSupported;
   }
 
   isRewardedSupported(): boolean {
     if (isNativeApp()) return true;
+    // Su Klyo la pubblicita' con premio non e' ancora attiva: nessun pulsante "guarda la pubblicita'"
+    if (this.klyo) return false;
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
