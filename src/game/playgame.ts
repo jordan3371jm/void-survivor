@@ -98,6 +98,8 @@ class PlaygamaSDK {
 
   /** Lingua del giocatore indicata dalla piattaforma (es. 'it', 'en'), se disponibile. */
   getLanguage(): string | null {
+    // Su Klyo la lingua e' quella del dispositivo del giocatore
+    if (this.klyo) { try { return (navigator.language || '').slice(0, 2).toLowerCase() || null; } catch { return null; } }
     try {
       const l = this.bridge?.platform?.language;
       return typeof l === 'string' && l ? l.slice(0, 2).toLowerCase() : null;
