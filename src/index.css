@@ -496,7 +496,7 @@ svg { flex-shrink: 0; }
   .vs-menu-icon { width: 36px; height: 36px; }
   .vs-dock { gap: 2px; padding: 6px 4px; }
   .vs-dock-icon { width: 40px; height: 40px; }
-  .vs-dock-label { font-size: 0.62rem; }
+  .vs-dock-label { font-size: 0.64rem; }
 }
 @media (max-width: 360px) {
   .vs-dock-label { display: none; }
@@ -1205,3 +1205,9 @@ svg { flex-shrink: 0; }
 }
 .vs-you { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; color: #04121a; background: var(--cyan); vertical-align: middle; }
 .vs-game-canvas:focus { outline: none; }
+
+/* Telefoni e tablet: ogni pulsante almeno 44 px (minimo di Apple, Google e Klyo per toccarlo bene) */
+@media (pointer: coarse) {
+  .vs-btn--sm, .vs-tab, .vs-profile-pill { min-height: 44px; }
+  .vs-back { min-width: 44px; }
+}
