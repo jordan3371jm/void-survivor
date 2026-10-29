@@ -619,6 +619,14 @@ export default function App() {
     setChestRewards(null);
   }, []);
 
+  // Dopo una pubblicita' la pagina di Playgama si tiene il "focus": i tasti non arrivavano piu' al gioco
+  // finche' non si cliccava. Lo riportiamo noi sul gioco.
+  const focusGame = useCallback(() => {
+    try { window.focus(); } catch { /* ignora */ }
+    try { canvasRef.current?.focus({ preventScroll: true }); } catch { /* ignora */ }
+    const st = gameStateRef.current; if (st) { st.keys.clear(); st.touchDir = null; }
+  }, []);
+
   const handleRevive = useCallback(async () => {
     const state = gameStateRef.current;
     try {
@@ -642,9 +650,10 @@ export default function App() {
           countdownRef.current -= 1;
           setReviveCountdown(countdownRef.current);
           if (countdownRef.current > 0) window.setTimeout(tick, 1000);
-          else { pausedRef.current = false; setPaused(false); platformPausedRef.current = false; }
+          else { pausedRef.current = false; setPaused(false); platformPausedRef.current = false; focusGame(); }
         };
         window.setTimeout(tick, 1000);
+        focusGame();
         return;
       }
     } catch (error: any) {
@@ -1364,7 +1373,7 @@ export default function App() {
 
     return (
       <div className="vs-game">
-        <canvas ref={canvasRef} className="vs-game-canvas" />
+        <canvas ref={canvasRef} className="vs-game-canvas" tabIndex={-1} />
 
         {!gameOver && !levelUpPending && !revivePending && !chestRewards && (
           <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (Esc)`} onClick={togglePause}>

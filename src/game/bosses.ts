@@ -240,6 +240,43 @@ function gappedRings(c: MoveCtx, waves: number, count: number, speed: number, co
 // I BOSS
 // ---------------------------------------------------------------------------
 const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
+  // ===== MINI BOSS (tra un boss e l'altro): poche mosse, lente e ben segnalate =====
+  // Sentinella (ondata 3): la piu' facile. Raffica a ventaglio lenta e carica in linea retta.
+  mini_sentinel: [
+    { id: 'volley', weight: 3, run: c => {
+      for (let v = 0; v < 2; v++) c.at(v * 0.6, () => { const a = c.aim(); for (let i = -2; i <= 2; i++) bullet(c.state, c.boss.pos.x, c.boss.pos.y, a + i * 0.28, 210, c.dmg * 0.6, '#7ad7ff', 7); playShoot('boss_bolt'); });
+      return 1.6;
+    } },
+    { id: 'charge', weight: 2, run: c => { dashAt(c, 1.1, 620); return 2.2; } },
+  ],
+  // Cacciatore (ondata 8): balzo e mine che esplodono intorno al giocatore.
+  mini_hunter: [
+    { id: 'pounce', weight: 2.5, run: c => { dashAt(c, 0.9, 760); return 1.9; } },
+    { id: 'mines', weight: 2.5, run: c => {
+      const p = c.state.player.pos;
+      for (let i = 0; i < 4; i++) { const a = (i / 4) * TAU + Math.random(); strikeZone(c, p.x + Math.cos(a) * 110, p.y + Math.sin(a) * 110, 70, 1.2, 'star', '#ffb347', { burst: c.dmg }); }
+      c.at(1.2 * c.tele, () => playShoot('boss_slam'));
+      return 1.8;
+    } },
+  ],
+  // Guardiano (ondata 13): croce di 4 raggi fissi e anelli d'inchiostro con un varco.
+  mini_warden: [
+    { id: 'cross', weight: 2.5, run: c => {
+      c.ai.anchor = 2.2 * c.tele; const a = Math.random() * TAU;
+      for (let i = 0; i < 4; i++) beamFromBoss(c, { angle: a + (i * TAU) / 4, telegraph: 1.2, active: 0.9, width: 30, length: 650, dps: c.dmg * 1.4, style: 'void', color: '#d08cff' });
+      c.at(1.2 * c.tele, () => playShoot('boss_beam'));
+      return 2.4;
+    } },
+    { id: 'rings', weight: 2, run: c => gappedRings(c, 2, 18, 170, '#c45cff') },
+    { id: 'charge', weight: 1.5, run: c => { dashAt(c, 1.0, 700); return 2.0; } },
+  ],
+  // Mietitore (ondata 18): falce di 2 raggi rotanti, ragnatela a scacchiera e carica.
+  mini_reaper: [
+    { id: 'scythe', weight: 2.5, run: c => rotatingCross(c, 2, 'rift', '#ff5577', 0.5, 600) },
+    { id: 'web', weight: 2, run: c => checkerboard(c, 'void', '#ff7799', 115) },
+    { id: 'charge', weight: 1.5, run: c => { dashAt(c, 0.9, 820); return 1.9; } },
+  ],
+
   // MORTE NERA: superlaser verde, turbolaser rossi, caccia imperiali, trincea
   boss_death_star: [
     { id: 'superlaser', weight: 3, run: c => {
@@ -528,7 +565,7 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
 function getAI(state: GameState, boss: Enemy): BossAI {
   const e = boss as any;
   if (!e.ai) {
-    const tier = Math.min(12, state.gameMode === 'boss_rush' ? state.bossRushIndex : Math.max(0, (state.bossSpawnCount || 1) - 1));
+    const tier = boss.isMini ? Math.min(6, Math.floor(state.wave / 8)) : Math.min(12, state.gameMode === 'boss_rush' ? state.bossRushIndex : Math.max(0, (state.bossSpawnCount || 1) - 1));
     e.ai = { tier, cooldown: 1.6, lastMove: '', enraged: false, anchor: 0, dash: null, shield: 0, lastHp: boss.hp, steps: [], time: 0 } as BossAI;
   }
   return e.ai as BossAI;
@@ -547,7 +584,7 @@ export function updateBoss(state: GameState, boss: Enemy, dt: number, toPlayer: 
   ai.lastHp = boss.hp;
 
   // Seconda fase sotto il 50% di vita
-  if (!ai.enraged && boss.hp < boss.maxHp * 0.5) {
+  if (!ai.enraged && !boss.isMini && boss.hp < boss.maxHp * 0.5) {
     ai.enraged = true;
     (boss as any).enraged = true;
     ai.cooldown = Math.min(ai.cooldown, 0.6);
@@ -672,9 +709,9 @@ export function updateBossHazards(state: GameState, dt: number): void {
 }
 
 /** Rimuove tutte le zone di un boss (quando muore). */
-export function clearBossHazards(state: GameState, bossId?: string): void {
+export function clearBossHazards(state: GameState, bossId?: string, onlyOwn = false): void {
   const list = hazards(state);
-  for (let i = list.length - 1; i >= 0; i--) if (!bossId || list[i].followBoss === bossId || list[i].followBoss === undefined) list.splice(i, 1);
+  for (let i = list.length - 1; i >= 0; i--) if (!bossId || list[i].followBoss === bossId || (!onlyOwn && list[i].followBoss === undefined)) list.splice(i, 1);
 }
 
 // ---------------------------------------------------------------------------

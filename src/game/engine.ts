@@ -40,6 +40,10 @@ const SPRITE_DEFS: Partial<Record<EnemyType, { file: string; scale: number; mode
   parasite: { file: 'parasite', scale: 1.35, mode: 'spin' },
   swarm: { file: 'swarm', scale: 1.7, mode: 'up' },
   guardian: { file: 'guardian.svg', scale: 1.5, mode: 'fixed' },
+  mini_sentinel: { file: 'drone_sentinel', scale: 1.5, mode: 'fixed' },
+  mini_hunter: { file: 'star_scorpion', scale: 1.6, mode: 'down' },
+  mini_warden: { file: 'cosmic_squid', scale: 1.7, mode: 'up' },
+  mini_reaper: { file: 'void_spider', scale: 1.7, mode: 'up' },
   boss_death_star: { file: 'boss_death_star', scale: 1.1, mode: 'fixed' },
   boss_xenomorph: { file: 'boss_xenomorph', scale: 1.25, mode: 'fixed' },
   boss_cthulhu: { file: 'boss_cthulhu', scale: 1.25, mode: 'fixed' },
@@ -358,6 +362,11 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     parasite: { radius: 10, hp: 10 * timeMultiplier, speed: 80, expValue: 5, color: '#ff00ff', pattern: 'parasite' },
     guardian: { radius: 40, hp: 50 * timeMultiplier, speed: 30, expValue: 15, color: '#ffcc00', pattern: 'shoot', shootTimer: 0, shootInterval: 1.5 },
     swarm: { radius: 8, hp: 3 * timeMultiplier, speed: 150, expValue: 1, color: '#88ff88', pattern: 'swarm' },
+    // mini boss (la vita reale e' calcolata sotto)
+    mini_sentinel: { radius: 34, hp: 150, speed: 55, expValue: 40, color: '#7ad7ff', pattern: 'boss' },
+    mini_hunter: { radius: 36, hp: 500, speed: 70, expValue: 60, color: '#ffb347', pattern: 'boss' },
+    mini_warden: { radius: 40, hp: 1100, speed: 45, expValue: 80, color: '#d08cff', pattern: 'boss' },
+    mini_reaper: { radius: 40, hp: 2000, speed: 65, expValue: 100, color: '#ff5577', pattern: 'boss' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
     boss_xenomorph: { radius: 70, hp: 2300 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
     boss_cthulhu: { radius: 90, hp: 6000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
@@ -372,8 +381,12 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
   if (type.startsWith('boss_') && state.gameMode === 'boss_rush') { const i = state.bossRushIndex || 0; base.hp = 1400 * (1 + i * 0.5) * (1 + i * 0.06) * (i >= 2 ? 1.15 : 1); }
+  // Mini boss: crescono come i boss; dal secondo giro (ondata 23 in poi) sono molto piu' forti
+  if (type.startsWith('mini_')) { const cycle = Math.floor(Math.max(0, state.wave - 3) / 20); base.hp = base.hp * (1 + waveIdx * 0.12) * (1 + cycle * 2.5); }
+  // Sciami: tantissimi ma con pochissima vita (non seguono la crescita normale)
+  else if (type === 'swarm') base.hp = 1 + state.wave * 0.6;
   // Dall'ondata 5 in poi i nemici normali diventano sempre piu' resistenti (chi spara resta fragile)
-  if (!type.startsWith('boss_') && base.pattern !== 'shoot' && state.wave >= 5) { const k = state.wave - 4; base.hp *= 1 + k * 0.1 + k * k * 0.012; }
+  else if (!type.startsWith('boss_') && base.pattern !== 'shoot' && state.wave >= 5) { const k = state.wave - 4; base.hp *= 1 + k * 0.1 + k * k * 0.012; }
   // Maledizione: nemici normali con piu' salute e velocita' (i boss non vengono modificati)
   const curseMul = type.startsWith('boss_') ? 1 : 1 + Math.max(0, state.player.curseLevel) / 100;
   // I danni dei nemici crescono col tempo (prima restavano 10 per tutta la partita: con un po' di armatura si era invincibili)
@@ -684,7 +697,8 @@ export function updateGame(state: GameState, dt: number): void {
     // Maledizione: piu' frequenza (spawnRate) e piu' quantita' (nemici per ogni spawn)
     const curseSpawn = 1 + Math.max(0, state.player.curseLevel) / 100;
     // Durante un boss arrivano il 70% di nemici in meno: lo scontro col boss resta al centro della scena
-    const spawnRate = Math.min(1 + state.time / 20, 8) * curseSpawn * (state.bossActive ? 0.3 : 1);
+    // piu' si va avanti di ondata piu' nemici arrivano (prima il ritmo si fermava a 8 al secondo dopo 2 minuti)
+    const spawnRate = Math.min(1 + state.time / 20, 8) * (1 + Math.max(0, state.wave - 1) * 0.045) * curseSpawn * (state.bossActive ? 0.3 : 1);
     if (Math.random() < spawnRate * gameDt) {
       const wave1: EnemyType[] = ['asteroid_small', 'swarm', 'drone_sentinel', 'cosmic_leech', 'star_beetle'];
       const wave2: EnemyType[] = ['asteroid_small', 'asteroid_medium', 'drone_sentinel', 'star_raider', 'void_crawler', 'star_fish'];
@@ -697,11 +711,47 @@ export function updateGame(state: GameState, dt: number): void {
       if (type === 'swarm') { for (let i = 0; i < Math.round(5 * curseSpawn); i++) state.enemies.push(spawnEnemy(state, 'swarm')); }
       else {
         const extra = curseSpawn - 1; // quantita': 1 nemico + quota di maledizione (parte frazionaria casuale)
-        const copies = 1 + Math.floor(extra) + (Math.random() < extra - Math.floor(extra) ? 1 : 0);
+        const copies = 1 + Math.floor(extra) + (Math.random() < extra - Math.floor(extra) ? 1 : 0) + (state.wave >= 8 && Math.random() < Math.min(0.6, (state.wave - 7) * 0.03) ? 1 : 0);
         for (let i = 0; i < copies; i++) state.enemies.push(spawnEnemy(state, type));
       }
     }
   }
+  // --- Eventi di ondata: sciami e mini boss (solo normale/endless) ---
+  if (state.gameMode !== 'boss_rush' && state.wave !== (state as any).eventWave) {
+    (state as any).eventWave = state.wave;
+    const w = state.wave;
+    // sciami nelle ondate 4, 6, 9, 11, 14, 16 ... 36, 39 (e oltre in endless)
+    if (w >= 4 && (w % 5 === 4 || w % 5 === 1)) {
+      const total = Math.min(90, 28 + w * 2);
+      const dirA = Math.random() * Math.PI * 2;
+      for (let g = 0; g < 3; g++) {
+        const a = dirA + (g - 1) * 0.9;
+        (state as any).pendingSwarms = [ ...((state as any).pendingSwarms || []), { at: state.time + g * 2.2, a, n: Math.round(total / 3) } ];
+      }
+      (state as any).eventBanner = { text: 'swarm', t: 3 };
+      playShoot('boss_roar');
+    }
+    // mini boss nelle ondate 3, 8, 13, 18, 23, 28, 33, 38 (e oltre in endless)
+    if (w >= 3 && w % 5 === 3) {
+      const minis: EnemyType[] = ['mini_sentinel', 'mini_hunter', 'mini_warden', 'mini_reaper'];
+      const mt = minis[Math.floor((w - 3) / 5) % minis.length];
+      const m = spawnEnemy(state, mt); m.isMini = true; state.enemies.push(m);
+      (state as any).eventBanner = { text: mt, t: 3 };
+      state.screenShake = Math.max(state.screenShake, 0.3);
+    }
+  }
+  // gli sciami arrivano a gruppi compatti da una direzione
+  if ((state as any).pendingSwarms?.length) {
+    const ready = (state as any).pendingSwarms.filter((s: any) => state.time >= s.at);
+    (state as any).pendingSwarms = (state as any).pendingSwarms.filter((s: any) => state.time < s.at);
+    for (const s of ready) {
+      const dist0 = 650 + Math.random() * 100;
+      const cx = state.player.pos.x + Math.cos(s.a) * dist0, cy = state.player.pos.y + Math.sin(s.a) * dist0;
+      for (let i = 0; i < s.n; i++) { const e = spawnEnemy(state, 'swarm'); const r = Math.random() * 90, b = Math.random() * Math.PI * 2; e.pos = { x: cx + Math.cos(b) * r, y: cy + Math.sin(b) * r }; e.damage *= 0.6; state.enemies.push(e); }
+    }
+  }
+  if ((state as any).eventBanner) { (state as any).eventBanner.t -= gameDt; if ((state as any).eventBanner.t <= 0) (state as any).eventBanner = null; }
+
   const { player, keys } = state; let mx = 0, my = 0;
   if (keys.has('w') || keys.has('arrowup')) my -= 1;
   if (keys.has('s') || keys.has('arrowdown')) my += 1;
@@ -818,7 +868,7 @@ export function updateGame(state: GameState, dt: number): void {
   for (const p of state.particles) { p.pos.x += p.vel.x * gameDt; p.pos.y += p.vel.y * gameDt; p.vel.x *= 0.95; p.vel.y *= 0.95; p.life -= gameDt; }
   for (const dmgNum of state.damageNumbers) { dmgNum.lifetime -= gameDt; dmgNum.pos.y -= 30 * gameDt; }
   state.damageNumbers = state.damageNumbers.filter(d => d.lifetime > 0);
-  for (const orb of state.expOrbs) { const d = dist(player.pos, orb.pos); if (d < player.magnetRange) orb.magnetized = true; if (orb.magnetized) { const dir = normalize({ x: player.pos.x - orb.pos.x, y: player.pos.y - orb.pos.y }); const speed = 400 + (player.magnetRange - d) * 3; orb.pos.x += dir.x * speed * gameDt; orb.pos.y += dir.y * speed * gameDt; } if (d < player.radius + orb.radius) { state.score += orb.value; const expGained = Math.floor(orb.value * (1 + player.expBonus)); player.exp += expGained; orb.value = 0; } }
+  for (const orb of state.expOrbs) { const d = dist(player.pos, orb.pos); if (d < player.magnetRange) orb.magnetized = true; if (orb.magnetized) { const dir = normalize({ x: player.pos.x - orb.pos.x, y: player.pos.y - orb.pos.y }); /* prima, oltre il raggio del magnete la velocita' diventava negativa e i cristalli volavano via */ const speed = Math.max(450 + Math.max(0, player.magnetRange - d) * 3, d * 1.6); const step = Math.min(d, speed * gameDt); orb.pos.x += dir.x * step; orb.pos.y += dir.y * step; } if (dist(player.pos, orb.pos) < player.radius + orb.radius + 2) { state.score += orb.value; const expGained = Math.floor(orb.value * (1 + player.expBonus)); player.exp += expGained; orb.value = 0; } }
   // Spade laser: ogni nemico subisce al massimo un colpo per frame anche se tocca piu' spade
   // (prima con 5 spade il danno sullo stesso nemico si moltiplicava per 5: arma troppo forte)
   if (state.laserSwords.length > 0) {
@@ -889,8 +939,15 @@ export function updateGame(state: GameState, dt: number): void {
         // Spawn 5 nuovi orbs per il boss
         for (let i = 0; i < 5; i++) spawnExpOrb(state, { x: e.pos.x + (Math.random() - 0.5) * 100, y: e.pos.y + (Math.random() - 0.5) * 100 }, 20); 
       }
+      else if (e.isMini) {
+        clearBossHazards(state, e.id, true);
+        state.coinsEarned += 20 + state.wave * 2; state.diamondsEarned += 1;
+        for (let i = 0; i < 4; i++) spawnExpOrb(state, { x: e.pos.x + (Math.random() - 0.5) * 80, y: e.pos.y + (Math.random() - 0.5) * 80 }, 6 + Math.floor(state.wave / 2));
+        spawnPickup(state, e.pos, Math.random() < 0.5 ? 'heart' : 'magnet');
+        state.screenShake = Math.max(state.screenShake, 0.4); spawnParticles(state, e.pos, e.color, 16);
+      }
       else if (e.type === 'guardian' && Math.random() < 0.3) state.diamondsEarned += 1;
-      if (!e.isBoss) rollEnemyDrop(state, e.pos);
+      if (!e.isBoss && !e.isMini) rollEnemyDrop(state, e.pos);
       return false;
     }
     return true;
@@ -944,16 +1001,17 @@ export function updateGame(state: GameState, dt: number): void {
   }
   // Limiti ottimizzati per performance - PROTEGGI I BOSS!
   if (state.enemies.length > 150) {
-    const bosses = state.enemies.filter(e => e.isBoss);
-    const normalEnemies = state.enemies.filter(e => !e.isBoss);
-    if (normalEnemies.length > 140) {
+    const bosses = state.enemies.filter(e => e.isBoss || e.isMini); // i mini boss non vengono mai tolti dal limite
+    const normalEnemies = state.enemies.filter(e => !e.isBoss && !e.isMini);
+    if (normalEnemies.length > 190) {
       normalEnemies.splice(0, normalEnemies.length - 140);
     }
     state.enemies = [...bosses, ...normalEnemies];
   }
   if (state.projectiles.length > 200) state.projectiles.splice(0, state.projectiles.length - 200);
   if (state.particles.length > 150) state.particles.splice(0, state.particles.length - 150);
-  if (state.expOrbs.length > 80) state.expOrbs.splice(0, state.expOrbs.length - 80);
+  // troppi cristalli a terra: i piu' vecchi si fondono con altri (prima venivano cancellati e l'esperienza andava persa)
+  while (state.expOrbs.length > 80) { const o = state.expOrbs.shift()!; const t = state.expOrbs[Math.floor(Math.random() * state.expOrbs.length)]; t.value += o.value; t.radius = Math.min(4 + t.value, 12); if (o.magnetized) t.magnetized = true; }
   if (state.damageNumbers.length > 30) state.damageNumbers.splice(0, state.damageNumbers.length - 30);
   if (state.nebulaPools.length > 24) state.nebulaPools.splice(0, state.nebulaPools.length - 24);
   if (state.stormHitboxes.length > 20) state.stormHitboxes.splice(0, state.stormHitboxes.length - 20);
@@ -1077,7 +1135,9 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     ctx.save(); ctx.translate(enemy.pos.x, enemy.pos.y);
     ctx.fillStyle = enemy.color;
     if (enemy.isBoss) drawBossAura(ctx, enemy, state.time);
+    if (enemy.isMini) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const g = ctx.createRadialGradient(0, 0, enemy.radius * 0.4, 0, 0, enemy.radius * 1.7); g.addColorStop(0, enemy.color + '55'); g.addColorStop(1, enemy.color + '00'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, enemy.radius * 1.7, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
     if (drawEnemySprite(ctx, enemy, state)) {
+      if (enemy.isMini) { const w = enemy.radius * 2.2; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(-w / 2, -enemy.radius - 16, w, 6); ctx.fillStyle = enemy.color; ctx.fillRect(-w / 2, -enemy.radius - 16, w * Math.max(0, enemy.hp / enemy.maxHp), 6); }
       if (enemy.isBoss) { ctx.fillStyle = '#333'; ctx.fillRect(-enemy.radius, -enemy.radius - 15, enemy.radius * 2, 8); ctx.fillStyle = '#ff0044'; ctx.fillRect(-enemy.radius, -enemy.radius - 15, enemy.radius * 2 * (enemy.hp / enemy.maxHp), 8); }
       ctx.restore();
       continue;
@@ -1675,6 +1735,28 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
 
   ctx.restore();
 
+  // Avviso di evento (sciame o mini boss)
+  const ev = (state as any).eventBanner as { text: string; t: number } | null;
+  if (ev && !(state.currentBossType && state.bossNameTimer > 0)) {
+    const L5 = (it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh } as any)[lang] || en;
+    const MINI: Record<string, string> = {
+      mini_sentinel: L5('SENTINELLA', 'SENTINEL', 'CENTINELA', 'SENTINELLE', '哨兵'), mini_hunter: L5('CACCIATORE', 'HUNTER', 'CAZADOR', 'CHASSEUR', '猎手'),
+      mini_warden: L5('GUARDIANO', 'WARDEN', 'GUARDIÁN', 'GARDIEN', '守望者'), mini_reaper: L5('MIETITORE', 'REAPER', 'SEGADOR', 'FAUCHEUR', '收割者'),
+    };
+    const isSwarm = ev.text === 'swarm';
+    const title = isSwarm ? L5('SCIAME IN ARRIVO!', 'SWARM INCOMING!', '¡LLEGA UN ENJAMBRE!', 'ESSAIM EN APPROCHE !', '虫群来袭！') : L5('MINI BOSS', 'MINI BOSS', 'MINI JEFE', 'MINI BOSS', '小头目');
+    const sub = isSwarm ? L5('Tantissimi nemici deboli', 'Tons of weak enemies', 'Muchísimos enemigos débiles', "Plein d'ennemis faibles", '大量弱小敌人') : (MINI[ev.text] || '');
+    const a2 = Math.min(1, ev.t * 1.5, (3 - ev.t) * 4);
+    ctx.save(); ctx.globalAlpha = Math.max(0, a2); ctx.textAlign = 'center';
+    const cy = height * 0.28;
+    ctx.font = `900 ${Math.round(Math.min(width, 900) * 0.055)}px Orbitron, sans-serif`;
+    ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.fillStyle = isSwarm ? '#7dff9a' : '#ffcf5a';
+    ctx.shadowColor = ctx.fillStyle as string; ctx.shadowBlur = 18;
+    ctx.strokeText(title, width / 2, cy); ctx.fillText(title, width / 2, cy);
+    ctx.shadowBlur = 0; ctx.font = `800 ${Math.round(Math.min(width, 900) * 0.028)}px "Exo 2", sans-serif`; ctx.fillStyle = '#ffffff';
+    ctx.strokeText(sub, width / 2, cy + Math.min(width, 900) * 0.045); ctx.fillText(sub, width / 2, cy + Math.min(width, 900) * 0.045);
+    ctx.restore();
+  }
   if (state.currentBossType && state.bossNameTimer > 0) {
     const alpha = Math.min(1, state.bossNameTimer);
     const bossName = lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'en' ? getBossNameEN(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : getBossNameZH(state.currentBossType);
