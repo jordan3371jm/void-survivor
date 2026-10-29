@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "build:klyo": "VITE_TARGET=klyo vite build --outDir dist-klyo && rm -f dist-klyo/audio/bgm.mp3 dist-klyo/playgama-bridge-config.json dist-klyo/assets/firebase-*.js && cp klyo/CREDITS.md klyo/OFL-*.txt dist-klyo/ && rm -f void-survivors-klyo.zip && cd dist-klyo && zip -qr ../void-survivors-klyo.zip .",
+    "build:klyo": "VITE_TARGET=klyo vite build --outDir dist-klyo && rm -f dist-klyo/audio/bgm.mp3 dist-klyo/playgama-bridge-config.json dist-klyo/assets/firebase-*.js && cp -r klyo/CREDITS.md klyo/LICENSES dist-klyo/ && rm -f void-survivors-klyo.zip && cd dist-klyo && zip -qr ../void-survivors-klyo.zip .",
     "build:android": "vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android",
     "build:android:test": "VITE_ADS_TEST=1 vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android"
   },
