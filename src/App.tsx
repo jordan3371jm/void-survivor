@@ -748,6 +748,7 @@ export default function App() {
   useEffect(() => {
     if (screen !== 'playing') return undefined;
     const canvas = canvasRef.current;
+    if (canvas) playgama.registerCanvas(canvas);
     const MOVE_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ']);
 
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -109,12 +109,7 @@ class PlaygamaSDK {
   sendGameReady(): void {
     if (!this.isInitialized()) return;
     if (this.klyo) {
-      try {
-        this.klyo.ready();
-        // pulsante della pagina per registrare una clip del gioco
-        const canvas = document.querySelector('canvas.vs-game-canvas');
-        if (canvas && this.klyo.canvas) this.klyo.canvas(canvas);
-      } catch (error) { console.error('[Klyo] Errore ready:', error); }
+      try { this.klyo.ready(); } catch (error) { console.error('[Klyo] Errore ready:', error); }
       return;
     }
 
@@ -123,6 +118,12 @@ class PlaygamaSDK {
     } catch (error) {
       console.error('[Playgama] Errore invio game_ready:', error);
     }
+  }
+
+  /** Klyo: il campo di gioco (esiste solo durante la partita) per il pulsante "registra una clip" della pagina */
+  registerCanvas(canvas: HTMLCanvasElement): void {
+    if (!this.klyo?.canvas) return;
+    try { this.klyo.canvas(canvas); } catch (error) { console.warn('[Klyo] canvas:', error); }
   }
 
   async showInterstitial(placement: string = 'game_over'): Promise<void> {
