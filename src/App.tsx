@@ -12,7 +12,7 @@ import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
-import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
@@ -171,6 +171,12 @@ export default function App() {
   const lang = store.settings.language;
   // solo in sviluppo: accesso allo stato della partita per i test automatici
   if (import.meta.env.DEV) (window as any).__vsGame = gameStateRef;
+
+  // Tema chiaro/scuro: attributo su <html> (il CSS fa il resto; "auto" segue il dispositivo)
+  const theme = store.settings.theme || 'auto';
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   useEffect(() => {
     setSfxVolume(store.settings.sfxVolume);
@@ -1301,6 +1307,17 @@ export default function App() {
                 {(Object.keys(languageNames) as Language[]).map(l => (
                   <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}>
                     {languageNames[l]}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="vs-panel vs-settings-wide">
+              <h2 className="vs-panel-title"><SunMoon size={18} />{t(lang, 'theme')}</h2>
+              <div className="vs-lang-grid">
+                {(['auto', 'light', 'dark'] as const).map(th => (
+                  <button key={th} type="button" className={`vs-lang${(store.settings.theme || 'auto') === th ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}>
+                    {t(lang, `theme_${th}`)}
                   </button>
                 ))}
               </div>

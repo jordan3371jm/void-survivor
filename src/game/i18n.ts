@@ -548,6 +548,18 @@ for (const l of Object.keys(missingTranslations) as Language[]) {
   translations[l] = { ...missingTranslations[l], ...translations[l] };
 }
 
+// Tema chiaro/scuro nelle impostazioni
+const themeTexts: Record<Language, Record<string, string>> = {
+  it: { theme: 'Tema', theme_auto: 'Automatico', theme_light: 'Chiaro', theme_dark: 'Scuro' },
+  en: { theme: 'Theme', theme_auto: 'Automatic', theme_light: 'Light', theme_dark: 'Dark' },
+  es: { theme: 'Tema', theme_auto: 'Automático', theme_light: 'Claro', theme_dark: 'Oscuro' },
+  fr: { theme: 'Thème', theme_auto: 'Automatique', theme_light: 'Clair', theme_dark: 'Sombre' },
+  zh: { theme: '主题', theme_auto: '自动', theme_light: '浅色', theme_dark: '深色' },
+};
+for (const l of Object.keys(themeTexts) as Language[]) {
+  translations[l] = { ...themeTexts[l], ...translations[l] };
+}
+
 export function t(lang: Language, key: string): string {
   const app = appText(key, lang); if (app) return app;
   return translations[lang]?.[key] || translations.en[key] || key;

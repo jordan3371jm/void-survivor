@@ -89,6 +89,7 @@ export interface GameStore {
     speedBoostPaused: boolean;
     tutorialDone?: boolean;
     languageChosen?: boolean;
+    theme?: 'auto' | 'light' | 'dark';
   };
   ships: {
     starter: boolean;
