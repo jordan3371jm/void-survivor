@@ -55,6 +55,8 @@ export interface Player extends Entity {
 
 export interface Enemy extends Entity {
   type: EnemyType;
+  /** mini boss: usa le mosse con preavviso dei boss, ma non ferma le ondate */
+  isMini?: boolean;
   speed: number;
   expValue: number;
   color: string;
@@ -269,7 +271,8 @@ export type EnemyType =
   | 'void_spider' | 'star_fish' | 'cosmic_squid' | 'star_destroyer'
   | 'imperial_probe' | 'kamikaze' | 'parasite' | 'guardian' | 'swarm'
   | 'boss_death_star' | 'boss_xenomorph' | 'boss_cthulhu' | 'boss_borg_cube'
-  | 'boss_space_kraken' | 'boss_galaxy_devourer' | 'boss_void_emperor' | 'boss_cosmic_horror';
+  | 'boss_space_kraken' | 'boss_galaxy_devourer' | 'boss_void_emperor' | 'boss_cosmic_horror'
+  | 'mini_sentinel' | 'mini_hunter' | 'mini_warden' | 'mini_reaper';
 
 export type ShipType = 
   | 'starter' | 'fire_ship' | 'laser_ship' | 'electric_ship'
