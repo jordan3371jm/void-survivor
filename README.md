@@ -15,6 +15,13 @@ La build usa percorsi relativi: il contenuto di `dist/` si può caricare così c
 (Playgama, hosting statico, sottocartelle). La cartella `dist/` è già inclusa nel repository,
 pronta da pubblicare: dopo ogni modifica rigenerala con `npm run build`.
 
+## Klyo Games
+
+`npm run build:klyo` crea la cartella `dist-klyo/` e il file `void-survivors-klyo.zip`
+(con `index.html` alla radice), pronto da caricare su [dev.klyo.pl](https://dev.klyo.pl).
+Questa versione non carica Playgama Bridge (niente pubblicità nel gioco: su Klyo gli annunci
+sono intorno al gioco) e usa i nomi senza marchi registrati e la musica libera CC0, come l'app.
+
 Immagini promozionali (16:9 e 9:16) nella cartella `promo/`.
 
 ## Struttura
