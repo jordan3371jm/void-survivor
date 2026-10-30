@@ -7,6 +7,7 @@ import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMu
 import { t, Language, languageNames } from './game/i18n';
 import { plFromEn } from './game/pl';
 import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeAbilityAttack, getAbilityAttackBonus, applyDiamondUpgrade, getDiamondUpgradeCost, applyCoinUpgrade, getCoinUpgradeCost, getStatLevel, getStatMaxLevel, DiamondUpgradeType, CoinUpgradeType, addHighScore, createUserProfile, saveUserProfile } from './game/store';
+import { STORAGE_LATE_EVENT } from './game/storage';
 import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
 import { AbilityIcon } from './components/abilityIcon';
@@ -172,6 +173,13 @@ export default function App() {
   const lang = store.settings.language;
   // solo in sviluppo: accesso allo stato della partita per i test automatici
   if (import.meta.env.DEV) (window as any).__vsGame = gameStateRef;
+
+  // Salvataggi arrivati dopo l'avvio (piattaforma lenta): si ricaricano i progressi veri al posto di quelli di default
+  useEffect(() => {
+    const onLate = () => { const s = loadStore(); storeRef.current = s; setStore(s); };
+    window.addEventListener(STORAGE_LATE_EVENT, onLate);
+    return () => window.removeEventListener(STORAGE_LATE_EVENT, onLate);
+  }, []);
 
   // Tema chiaro/scuro: attributo su <html> (il CSS fa il resto; "auto" segue il dispositivo)
   const theme = store.settings.theme || 'auto';

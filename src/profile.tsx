@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Award, Camera, Clock, Crown, ExternalLink, Gamepad2, Globe, Pencil, Skull, Star, Swords, Trophy, User, Waves, X } from 'lucide-react';
-import { GameStore, createUserProfile, saveUserProfile } from './game/store';
+import { GameStore, createUserProfile, loadStore, saveUserProfile } from './game/store';
 import { t, Language } from './game/i18n';
 import { plFromEn } from './game/pl';
 import { isKlyo } from './game/klyo';
@@ -87,7 +87,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ store, setStore, lan
           </div>
         </div>
         {platform.supported && !platform.authorized && (
-          <button type="button" className="vs-btn vs-btn--ghost vs-btn--block" onClick={async () => { if (await authorizePlatformPlayer()) { const pp = getPlatformPlayer(); update({ name: pp.name || profile.name, avatar: pp.photo || profile.avatar, id: pp.id || profile.id }); } }}>
+          <button type="button" className="vs-btn vs-btn--ghost vs-btn--block" onClick={async () => { if (await authorizePlatformPlayer()) { const pp = getPlatformPlayer(); const fresh = loadStore(); const base = fresh.userProfile || profile; setStore(saveUserProfile(fresh, { ...base, name: pp.name || base.name, avatar: pp.photo || base.avatar, id: pp.id || base.id })); } }}>
             <Globe size={16} />{L(lang, 'Accedi per entrare nella classifica globale', 'Sign in to join the global leaderboard', 'Inicia sesión para entrar en la clasificación global', 'Connecte-toi pour rejoindre le classement mondial', '登录以加入全球排行榜')}
           </button>
         )}

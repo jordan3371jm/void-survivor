@@ -1,4 +1,4 @@
-import { storageGetItem, storageSetItem, loadStorageKeys } from './storage';
+import { storageGetItem, storageSetItem, loadStorageKeys, reloadAfterLogin } from './storage';
 import { isKlyo, klyoSdk } from './klyo';
 // Bridge SaaS - Backend ufficiale Playgama
 
@@ -281,5 +281,10 @@ export function getPlatformPlayer(): PlatformPlayer {
 export async function authorizePlatformPlayer(): Promise<boolean> {
   const pl = (window as any).bridge?.player;
   if (!pl?.authorize) return false;
-  try { await pl.authorize(); return !!pl.isAuthorized; } catch { return false; }
+  try {
+    await pl.authorize();
+    if (!pl.isAuthorized) return false;
+    await reloadAfterLogin(); // i progressi passano all'account: si rileggono prima di salvare altro
+    return true;
+  } catch { return false; }
 }
