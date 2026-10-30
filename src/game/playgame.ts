@@ -213,6 +213,35 @@ class PlaygamaSDK {
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
+  // Banner laterali (Advanced Banners): solo su computer con schermo largo, ai lati della scena,
+  // lontani da pulsanti e HUD. Su telefono/tablet nessun banner.
+  private bannerWanted: 'menu' | 'gameplay' | null = null;
+  private bannerShown: string | null = null;
+  private bannerResizeHooked = false;
+  setSideBanners(placement: 'menu' | 'gameplay' | null): void {
+    this.bannerWanted = placement;
+    if (!this.bannerResizeHooked && typeof window !== 'undefined') {
+      this.bannerResizeHooked = true;
+      let tm: any = null;
+      window.addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => this.applySideBanners(), 300); });
+    }
+    if (this.isInitialized()) this.applySideBanners();
+    else this.initialize().then(() => this.applySideBanners()).catch(() => {});
+  }
+  private applySideBanners(): void {
+    const ad = this.isInitialized() ? this.bridge?.advertisement : null;
+    if (!ad || !ad.isAdvancedBannersSupported) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    const desktop = this.bridge.device?.type === 'desktop';
+    const minW = this.bannerWanted === 'gameplay' ? 1400 : 1300;
+    const target = this.bannerWanted && desktop && w > h * 1.4 && w >= minW ? this.bannerWanted : null;
+    if (target === this.bannerShown) return;
+    try {
+      if (target) ad.showAdvancedBanners(target); else ad.hideAdvancedBanners();
+      this.bannerShown = target;
+    } catch (e) { console.warn('[Playgama] banner', e); }
+  }
+
 
 }
 

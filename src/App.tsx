@@ -188,6 +188,11 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
+  // Banner laterali: menu principale e partita (solo schermi larghi da computer, vedi playgame.ts)
+  useEffect(() => {
+    playgama.setSideBanners(screen === 'home' ? 'menu' : screen === 'playing' ? 'gameplay' : null);
+  }, [screen]);
+
   useEffect(() => {
     setSfxVolume(store.settings.sfxVolume);
     setMusicVolume(store.settings.musicVolume);
@@ -437,13 +442,18 @@ export default function App() {
       .catch((err: any) => console.error('[App] Errore salvataggio punteggio globale:', err));
   }, [commitStore]);
 
+  // Modalita' leggera automatica: se durante la partita gli fps restano sotto 42 per 6 secondi,
+  // niente bagliori, meno particelle e risoluzione piu' bassa (per il resto della sessione)
+  const lowFxRef = useRef(false);
+  const perfRef = useRef({ acc: 0, n: 0, slow: 0 });
+
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const w = canvas.clientWidth || window.innerWidth || 800;
     const h = canvas.clientHeight || window.innerHeight || 600;
     // Nitido sugli schermi ad alta densita', ma con un tetto di pixel per non rallentare i telefoni
-    const maxDpr = Math.sqrt(2_400_000 / Math.max(1, w * h));
+    const maxDpr = Math.sqrt((lowFxRef.current ? 1_000_000 : 2_400_000) / Math.max(1, w * h));
     const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, maxDpr));
     const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
     if (canvas.width !== bw) canvas.width = bw;
@@ -469,6 +479,14 @@ export default function App() {
         state.speedMultiplier = settings.speedMultiplier || 1;
         const active = !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
         if (active) { engine.updateGame(state, dt); trackFrame(state); }
+        if (active && !lowFxRef.current && rawMs > 0 && rawMs < 250) {
+          const pf = perfRef.current; pf.acc += rawMs; pf.n++;
+          if (pf.acc >= 3000) {
+            pf.slow = pf.n * 1000 / pf.acc < 42 ? pf.slow + 1 : 0; pf.acc = 0; pf.n = 0;
+            if (pf.slow >= 2) { lowFxRef.current = true; resizeCanvas(); }
+          }
+        }
+        (state as any).lowFx = lowFxRef.current;
         trackPerfFrame(rawMs, active);
 
         if (state.chestPending && !chestShownRef.current) {
@@ -772,7 +790,7 @@ export default function App() {
       if (!state) return;
       const key = e.key.toLowerCase();
       if (MOVE_KEYS.has(key)) e.preventDefault();
-      if (!e.repeat && (e.key === 'Escape' || key === 'p')) { togglePause(); return; }
+      if (!e.repeat && key === 'p') { togglePause(); return; }
       if (state.chestPending && !e.repeat && (key === 'enter' || key === ' ')) { closeChest(); return; }
       if (state.levelUpPending && !e.repeat && key === 'r') { handleReroll(); return; }
       if (state.levelUpPending && !e.repeat && ['1', '2', '3'].includes(key)) {
@@ -1404,13 +1422,13 @@ export default function App() {
         <canvas ref={canvasRef} className="vs-game-canvas" tabIndex={-1} />
 
         {!gameOver && !levelUpPending && !revivePending && !chestRewards && (
-          <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (Esc)`} onClick={togglePause}>
+          <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (P)`} onClick={togglePause}>
             {paused ? <Play size={20} /> : <Pause size={20} />}
           </button>
         )}
 
         <div className="vs-controls-hint" aria-hidden="true">
-          {L(lang, 'WASD / Frecce: muovi · Esc / P: pausa', 'WASD / Arrows: move · Esc / P: pause', 'WASD / Flechas: mover · Esc / P: pausa', 'WASD / Flèches : bouger · Échap / P : pause', 'WASD / 方向键：移动 · Esc / P：暂停')}
+          {L(lang, 'WASD / Frecce: muovi · P: pausa', 'WASD / Arrows: move · P: pause', 'WASD / Flechas: mover · P: pausa', 'WASD / Flèches : bouger · P : pause', 'WASD / 方向键：移动 · P：暂停')}
         </div>
 
         {levelUpPending && levelUpChoices.length > 0 && (

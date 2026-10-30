@@ -405,7 +405,10 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 30 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
 }
 
+// Modalita' leggera (dispositivi lenti, vedi App.tsx): meno particelle e niente bagliori
 function spawnParticles(state: GameState, pos: Vector2, color: string, count: number) {
+  if ((state as any).lowFx) { count = Math.ceil(count / 2); if (state.particles.length > 220) return; }
+  else if (state.particles.length > 600) return;
   for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2; const speed = Math.random() * 200 + 50;
     state.particles.push({ pos: { ...pos }, vel: { x: Math.cos(a) * speed, y: Math.sin(a) * speed }, life: Math.random() * 0.5 + 0.2, maxLife: 0.7, color, size: Math.random() * 4 + 2, type: 'explosion' });
@@ -1094,7 +1097,18 @@ export function revivePlayer(state: GameState): void {
   state.screenShake = 0.3;
 }
 
+/** Nella modalita' leggera il bagliore (shadowBlur, l'effetto piu' pesante del canvas) viene ignorato. */
+function setLowFx(ctx: CanvasRenderingContext2D, on: boolean): void {
+  const c = ctx as any;
+  if (on === !!c.__lowFx) return;
+  c.__lowFx = on;
+  // prima si azzera il valore vero, poi si ignorano le scritture successive
+  if (on) { ctx.shadowBlur = 0; Object.defineProperty(ctx, 'shadowBlur', { configurable: true, get: () => 0, set: () => {} }); }
+  else { delete c.shadowBlur; ctx.shadowBlur = 0; }
+}
+
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number, lang: string = 'it', showDamageNumbers: boolean = true): void {
+  setLowFx(ctx, !!(state as any).lowFx);
   const { player, camera } = state;
   const scaleFactor = getWorldZoom(width);
   const isMobile = scaleFactor !== 1;

@@ -30,6 +30,46 @@
           "id": "extra_life"
         }
       ]
+    },
+    "advancedBanners": {
+      "disable": false,
+      "placementFallback": "menu",
+      "menu": {
+        "action": "show",
+        "default": [],
+        "desktop:landscape:w>1300": [
+          {
+            "width": "12%",
+            "height": "60%",
+            "top": "20%",
+            "left": "0.5%"
+          },
+          {
+            "width": "12%",
+            "height": "60%",
+            "top": "20%",
+            "right": "0.5%"
+          }
+        ]
+      },
+      "gameplay": {
+        "action": "show",
+        "default": [],
+        "desktop:landscape:w>1400": [
+          {
+            "width": "10%",
+            "height": "44%",
+            "top": "28%",
+            "left": "0.5%"
+          },
+          {
+            "width": "10%",
+            "height": "44%",
+            "top": "28%",
+            "right": "0.5%"
+          }
+        ]
+      }
     }
   },
   "saas": {

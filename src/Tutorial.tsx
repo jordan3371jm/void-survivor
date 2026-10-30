@@ -15,7 +15,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
       title: L(lang, 'Muoviti', 'Move', 'Muévete', 'Déplace-toi', '移动'),
       text: touch
         ? L(lang, 'Trascina il dito sullo schermo per pilotare la nave. Evita i nemici: il contatto fa danno!', 'Drag your finger on the screen to steer the ship. Avoid enemies: touching them hurts!', 'Arrastra el dedo por la pantalla para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño!', "Fais glisser ton doigt sur l'écran pour piloter le vaisseau. Évite les ennemis : leur contact fait mal !", '在屏幕上拖动手指操控飞船。躲开敌人：碰到会受伤！')
-        : L(lang, 'Usa WASD o le frecce per pilotare la nave. Evita i nemici: il contatto fa danno! Esc mette in pausa.', 'Use WASD or the arrow keys to steer the ship. Avoid enemies: touching them hurts! Esc pauses.', 'Usa WASD o las flechas para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño! Esc pausa.', 'Utilise ZQSD/WASD ou les flèches pour piloter. Évite les ennemis : leur contact fait mal ! Échap met en pause.', '使用WASD或方向键操控飞船。躲开敌人：碰到会受伤！Esc暂停。'),
+        : L(lang, 'Usa WASD o le frecce per pilotare la nave. Evita i nemici: il contatto fa danno! P mette in pausa.', 'Use WASD or the arrow keys to steer the ship. Avoid enemies: touching them hurts! P pauses.', 'Usa WASD o las flechas para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño! P pausa.', 'Utilise ZQSD/WASD ou les flèches pour piloter. Évite les ennemis : leur contact fait mal ! P met en pause.', '使用WASD或方向键操控飞船。躲开敌人：碰到会受伤！P暂停。'),
     },
     {
       icon: <Crosshair size={40} />, color: '#f97316',
