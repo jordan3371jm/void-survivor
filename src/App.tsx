@@ -1195,28 +1195,28 @@ export default function App() {
           )}
 
           {upgradeTab === 'active' && (
+            <>
+            <div className="vs-panel vs-panel--soon">
+              <strong>{clean(t(lang, 'coming_soon'))}</strong>
+              <span className="vs-muted">{L(lang, 'Potenziamenti delle abilità attive in arrivo!', 'Active ability upgrades coming soon!', '¡Mejoras de habilidades activas muy pronto!', 'Améliorations des capacités actives bientôt !', '主动技能升级即将推出!')}</span>
+            </div>
             <div className="vs-grid vs-grid--abilities">
               {ACTIVE_ABILITIES.map(type => {
                 const info = getAbilityInfo(type);
-                const atkLvl = getAbilityAttackBonus(store, type);
-                const canAfford = store.coins >= 100;
                 return (
-                  <div key={type} className="vs-card vs-ability-card" style={{ ['--accent' as any]: info.color }}>
+                  <div key={type} className="vs-card vs-ability-card is-info" style={{ ['--accent' as any]: info.color }}>
                     <AbilityIcon type={type} color={info.color} size={56} />
                     <h3 className="vs-card-title">{t(lang, info.name)}</h3>
-                    <span className="vs-muted">{t(lang, 'attack_level')}: <b className="vs-accent-text">+{atkLvl}</b></span>
                     {EVOLUTIONS[type] && (
                       <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + questa passiva + scrigno di un boss', 'Max level + this passive + boss chest', 'Nivel máximo + esta pasiva + cofre de jefe', 'Niveau max + ce passif + coffre de boss', '满级+此被动+Boss宝箱')}>
                         <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))} → <b>{getEvolutionName(type, lang)}</b>
                       </span>
                     )}
-                    <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!canAfford} onClick={() => { const ns = upgradeAbilityAttack(storeRef.current, type); if (ns) commitStore(ns); }}>
-                      <Sparkles size={14} />+1 · <Coins size={14} />100
-                    </button>
                   </div>
                 );
               })}
             </div>
+            </>
           )}
 
           {upgradeTab === 'passive' && (

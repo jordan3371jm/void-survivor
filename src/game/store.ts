@@ -183,8 +183,12 @@ export function saveStore(store: GameStore): void {
   catch (e) { console.error('Failed to save store:', e); }
 }
 
+// Prezzi dei potenziamenti: crescita LINEARE (+15% del prezzo base a ogni livello).
+// Prima crescevano del 40-50% a ogni livello e dopo pochi acquisti costavano decine di migliaia di monete.
+const linearCost = (base: number, level: number) => Math.round(base * (1 + 0.15 * level));
+
 export function getUpgradeCost(level: number): number {
-  return Math.floor(150 * Math.pow(1.5, level));
+  return linearCost(100, level);
 }
 
 export function applyUpgrade(store: GameStore, stat: keyof typeof store.upgrades): GameStore | null {
@@ -223,38 +227,14 @@ export type DiamondUpgradeType = 'luck' | 'expBonus';
 export type UpgradeType = CoinUpgradeType | DiamondUpgradeType;
 
 export function getCoinUpgradeCost(stat: CoinUpgradeType, currentLevel: number): number {
-  const baseCosts: Record<CoinUpgradeType, number> = { defense: 250, critChance: 200, critDamage: 200, regeneration: 300, shipSpeed: 180 };
-  return Math.floor(baseCosts[stat] * Math.pow(1.4, currentLevel));
+  const baseCosts: Record<CoinUpgradeType, number> = { defense: 150, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
+  return linearCost(baseCosts[stat], currentLevel);
 }
 
 export function getDiamondUpgradeCost(stat: DiamondUpgradeType, currentLevel: number): number {
-  const baseCosts: Record<DiamondUpgradeType, number> = { luck: 20, expBonus: 15 };
-  const baseCost = baseCosts[stat];
-  
-  let additionalCost = 0;
-  
-  if (currentLevel < 10) {
-    additionalCost = currentLevel * 5;
-  } else if (currentLevel < 20) {
-    additionalCost = 50 + (currentLevel - 10) * 10;
-  } else if (currentLevel < 30) {
-    additionalCost = 50 + 100 + (currentLevel - 20) * 20;
-  } else if (currentLevel < 40) {
-    additionalCost = 50 + 100 + 200 + (currentLevel - 30) * 30;
-  } else if (currentLevel < 50) {
-    additionalCost = 50 + 100 + 200 + 300 + (currentLevel - 40) * 40;
-  } else {
-    const decade = Math.floor(currentLevel / 10);
-    const remainder = currentLevel % 10;
-    let total = 0;
-    for (let i = 1; i <= decade; i++) {
-      total += i * 10 * (i === 1 ? 0.5 : 1);
-    }
-    total += remainder * decade * 10;
-    additionalCost = total;
-  }
-  
-  return baseCost + additionalCost;
+  // i diamanti si guadagnano lentamente (boss e mini boss): +2 diamanti a ogni livello
+  const baseCosts: Record<DiamondUpgradeType, number> = { luck: 10, expBonus: 8 };
+  return baseCosts[stat] + currentLevel * 2;
 }
 
 export function getStatMaxLevel(stat: UpgradeType): number {

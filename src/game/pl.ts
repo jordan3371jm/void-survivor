@@ -504,6 +504,7 @@ const PL_FROM_EN: Record<string, string> = {
   "VOID EMPEROR": "CESARZ PUSTKI",
   "COSMIC HORROR": "KOSMICZNY KOSZMAR",
   "BOSS": "BOSS",
+  "Active ability upgrades coming soon!": "Ulepszenia umiejętności aktywnych już wkrótce!",
 };
 
 /** Traduzione polacca di una frase inglese delle schermate (se manca resta in inglese) */

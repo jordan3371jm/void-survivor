@@ -226,14 +226,23 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
   };
 }
 
+// Livelli massimi: armi attive fino a 10; passive fino a 10 solo queste, le altre fino a 5;
+// le armi evolute ripartono da 1 e arrivano a 5 (vedi progression.ts).
+const PASSIVES_TO_10 = new Set<string>(['passive_fusion_core', 'passive_neutronium_heart', 'passive_kinetic_accelerator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_galactic_coin']);
+export function abilityMaxLevel(type: AbilityType): number {
+  if (!type.startsWith('passive_')) return 10;
+  return PASSIVES_TO_10.has(type) ? 10 : 5;
+}
+
 export function createAbility(type: AbilityType): Ability {
   const info = getAbilityInfo(type);
-  return { type, level: 1, maxLevel: 5, timer: 0, cooldown: info.baseCooldown, damage: info.baseDamage, area: 50, projectiles: 1, name: info.name, description: info.description, color: info.color, rarity: info.rarity };
+  return { type, level: 1, maxLevel: abilityMaxLevel(type), timer: 0, cooldown: info.baseCooldown, damage: info.baseDamage, area: 50, projectiles: 1, name: info.name, description: info.description, color: info.color, rarity: info.rarity };
 }
 
 export function upgradeAbility(ability: Ability): Ability {
   const newLevel = ability.level + 1;
-  return { ...ability, level: newLevel, damage: ability.damage * 1.3, area: ability.area * 1.15, projectiles: Math.min(ability.projectiles + (newLevel % 2 === 0 ? 1 : 0), 8), cooldown: Math.max(ability.cooldown * 0.9, 0.05) };
+  // Crescita piu' dolce di prima (le armi ora arrivano al livello 10): un proiettile in piu' ogni 3 livelli
+  return { ...ability, level: newLevel, damage: ability.damage * 1.18, area: ability.area * 1.08, projectiles: Math.min(ability.projectiles + (newLevel % 3 === 0 ? 1 : 0), 8), cooldown: Math.max(ability.cooldown * 0.94, 0.05) };
 }
 
 export function applySinglePassiveAbility(abilityType: string): void {
@@ -1718,7 +1727,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       const pad = size * 0.1;
       drawAbilityIcon(ctx, ability.type, ability.color, x + pad, y + pad, size - pad * 2);
       // livello
-      const lvl = ability.evolved ? 'EVO' : String(ability.level);
+      const lvl = ability.evolved ? 'E' + ability.level : String(ability.level);
       const lw = Math.max(13 * s, 7 * s + lvl.length * 6 * s), lh = 12 * s;
       hudRoundRect(ctx, x + size - lw + 3 * s, y + size - lh + 3 * s, lw, lh, lh / 2);
       ctx.fillStyle = ability.evolved ? '#fbbf24' : ability.level >= ability.maxLevel ? '#f59e0b' : '#111427'; ctx.fill();

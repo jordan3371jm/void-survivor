@@ -59,6 +59,9 @@ function openChest(state: GameState, upgradeAbility: (a: any) => any, applyPassi
     evo.color = getEvolutionColor(evo.type) || evo.color;
     evo.damage *= 2.2;
     evo.cooldown = Math.max(0.05, evo.cooldown * 0.7);
+    // l'arma evoluta ha i suoi livelli: riparte da 1 e sale fino a 5
+    evo.level = 1;
+    evo.maxLevel = 5;
     rewards.push({ kind: 'evolve', abilityType: evo.type });
   }
   // 2) fino a 3 potenziamenti di abilita' non al massimo
