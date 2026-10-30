@@ -172,6 +172,12 @@ export function loadStore(): GameStore {
     const saved = storageGetItem(STORE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      // Nave Buco Nero tolta dal gioco: chi l'aveva comprata riceve indietro le monete (una sola volta)
+      if (parsed.ships?.blackhole_ship) {
+        parsed.ships = { ...parsed.ships, blackhole_ship: false };
+        parsed.coins = (parsed.coins || 0) + 2000;
+      }
+      if (parsed.currentShip === 'blackhole_ship') parsed.currentShip = 'starter';
       return { ...DEFAULT_STORE, ...parsed, stats: { ...DEFAULT_STORE.stats, ...(parsed.stats || {}) }, settings: { ...DEFAULT_STORE.settings, ...(parsed.settings || {}) }, ships: { ...DEFAULT_STORE.ships, ...(parsed.ships || {}) }, upgrades: { ...DEFAULT_STORE.upgrades, ...(parsed.upgrades || {}) } };
     }
   } catch (e) { console.error('Failed to load store:', e); }

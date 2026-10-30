@@ -21,12 +21,12 @@ const BOSSES: Record<string, L5> = {
 };
 
 const TEXTS: Partial<Record<keyof L5, Record<string, string>>> = {
-  it: { ship_tie_fighter: 'Nave Doppia Ala', achievement_boss_1: 'Distruttore di Pianeti', achievement_boss_1_desc: 'Sconfiggi il Distruttore di Pianeti', achievement_boss_2: "Regina dell'Alveare", achievement_boss_2_desc: "Sconfiggi la Regina dell'Alveare", achievement_boss_4: 'Cubo Assimilatore', achievement_boss_4_desc: 'Sconfiggi il Cubo Assimilatore' },
-  en: { ship_tie_fighter: 'Twin Wing Ship', achievement_boss_2: 'Hive Queen', achievement_boss_2_desc: 'Defeat the Hive Queen', achievement_boss_4: 'Assimilator Cube', achievement_boss_4_desc: 'Defeat the Assimilator Cube' },
-  es: { ship_tie_fighter: 'Nave Doble Ala', achievement_boss_2: 'Reina de la Colmena', achievement_boss_2_desc: 'Derrota a la Reina de la Colmena', achievement_boss_4: 'Cubo Asimilador', achievement_boss_4_desc: 'Derrota al Cubo Asimilador' },
-  fr: { ship_tie_fighter: 'Vaisseau Double Aile', achievement_boss_2: 'Reine de la Ruche', achievement_boss_2_desc: 'Vainquez la Reine de la Ruche', achievement_boss_4: 'Cube Assimilateur', achievement_boss_4_desc: 'Vainquez le Cube Assimilateur' },
-  pl: { ship_tie_fighter: 'Statek podwójne skrzydło', achievement_boss_2: 'Królowa roju', achievement_boss_2_desc: 'Pokonaj Królową roju', achievement_boss_4: 'Sześcian asymilatora', achievement_boss_4_desc: 'Pokonaj Sześcian asymilatora' },
-  zh: { ship_tie_fighter: '双翼飞船', achievement_boss_2: '虫巢女王', achievement_boss_2_desc: '击败虫巢女王', achievement_boss_4: '同化立方体', achievement_boss_4_desc: '击败同化立方体' },
+  it: { achievement_boss_1: 'Distruttore di Pianeti', achievement_boss_1_desc: 'Sconfiggi il Distruttore di Pianeti', achievement_boss_2: "Regina dell'Alveare", achievement_boss_2_desc: "Sconfiggi la Regina dell'Alveare", achievement_boss_4: 'Cubo Assimilatore', achievement_boss_4_desc: 'Sconfiggi il Cubo Assimilatore' },
+  en: { achievement_boss_2: 'Hive Queen', achievement_boss_2_desc: 'Defeat the Hive Queen', achievement_boss_4: 'Assimilator Cube', achievement_boss_4_desc: 'Defeat the Assimilator Cube' },
+  es: { achievement_boss_2: 'Reina de la Colmena', achievement_boss_2_desc: 'Derrota a la Reina de la Colmena', achievement_boss_4: 'Cubo Asimilador', achievement_boss_4_desc: 'Derrota al Cubo Asimilador' },
+  fr: { achievement_boss_2: 'Reine de la Ruche', achievement_boss_2_desc: 'Vainquez la Reine de la Ruche', achievement_boss_4: 'Cube Assimilateur', achievement_boss_4_desc: 'Vainquez le Cube Assimilateur' },
+  pl: { achievement_boss_2: 'Królowa roju', achievement_boss_2_desc: 'Pokonaj Królową roju', achievement_boss_4: 'Sześcian asymilatora', achievement_boss_4_desc: 'Pokonaj Sześcian asymilatora' },
+  zh: { achievement_boss_2: '虫巢女王', achievement_boss_2_desc: '击败虫巢女王', achievement_boss_4: '同化立方体', achievement_boss_4_desc: '击败同化立方体' },
 };
 
 const EVOS: Record<string, L5> = {
