@@ -189,9 +189,9 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  // Banner laterali: menu principale e partita (solo schermi larghi da computer, vedi playgame.ts)
+  // Banner su tutte le schermate (ai lati su computer larghi, striscia in basso altrove: vedi playgame.ts)
   useEffect(() => {
-    playgama.setSideBanners(screen === 'home' ? 'menu' : screen === 'playing' ? 'gameplay' : null);
+    playgama.setSideBanners(screen === 'home' ? 'menu' : screen === 'playing' ? 'gameplay' : 'pages');
   }, [screen]);
 
   useEffect(() => {

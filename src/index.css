@@ -1290,3 +1290,7 @@ svg { flex-shrink: 0; }
   .vs-btn--sm, .vs-tab, .vs-profile-pill { min-height: 44px; }
   .vs-back { min-width: 44px; }
 }
+
+/* Banner Playgama in basso (telefoni, tablet, finestre piccole): schermate e finestre finiscono sopra la striscia */
+.vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { bottom: var(--ad-bottom, 0px); }
+.vs-toast { bottom: calc(24px + var(--safe-b) + var(--ad-bottom, 0px)); }

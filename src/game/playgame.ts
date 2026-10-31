@@ -213,12 +213,16 @@ class PlaygamaSDK {
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
-  // Banner laterali (Advanced Banners): solo su computer con schermo largo, ai lati della scena,
-  // lontani da pulsanti e HUD. Su telefono/tablet nessun banner.
-  private bannerWanted: 'menu' | 'gameplay' | null = null;
+  // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:
+  // - computer con finestra larga, menu e partita: due banner stretti ai lati della scena
+  // - tutto il resto (telefoni, tablet, finestre piccole, altre schermate): una striscia in basso,
+  //   e il gioco si restringe sopra (variabile CSS --ad-bottom), cosi' nessun pulsante finisce sotto.
+  // Le soglie qui devono restare uguali alle chiavi di public/playgama-bridge-config.json.
+  private bannerWanted: 'menu' | 'gameplay' | 'pages' | null = null;
   private bannerShown: string | null = null;
+  private bannerReserve = '';
   private bannerResizeHooked = false;
-  setSideBanners(placement: 'menu' | 'gameplay' | null): void {
+  setSideBanners(placement: 'menu' | 'gameplay' | 'pages' | null): void {
     this.bannerWanted = placement;
     if (!this.bannerResizeHooked && typeof window !== 'undefined') {
       this.bannerResizeHooked = true;
@@ -232,14 +236,26 @@ class PlaygamaSDK {
     const ad = this.isInitialized() ? this.bridge?.advertisement : null;
     if (!ad || !ad.isAdvancedBannersSupported) return;
     const w = window.innerWidth, h = window.innerHeight;
-    const desktop = this.bridge.device?.type === 'desktop';
-    const minW = this.bannerWanted === 'gameplay' ? 1400 : 1300;
-    const target = this.bannerWanted && desktop && w > h * 1.4 && w >= minW ? this.bannerWanted : null;
-    if (target === this.bannerShown) return;
+    const device: string = this.bridge.device?.type || 'desktop';
+    const landscape = w > h;
+    const target = this.bannerWanted;
+    let reserve = 0; // % dell'altezza della finestra occupata dalla striscia in basso
+    if (target) {
+      const side = device === 'desktop' && landscape && ((target === 'menu' && w > 1300) || (target === 'gameplay' && w > 1400));
+      if (!side) reserve = device === 'mobile' ? (landscape ? 14 : 8) : device === 'tablet' ? (landscape ? 8 : 6) : 8;
+    }
+    const px = reserve ? Math.round(h * reserve / 100) + 'px' : '0px';
+    if (target === this.bannerShown && px === this.bannerReserve) return;
     try {
       if (target) ad.showAdvancedBanners(target); else ad.hideAdvancedBanners();
       this.bannerShown = target;
-    } catch (e) { console.warn('[Playgama] banner', e); }
+    } catch (e) { console.warn('[Playgama] banner', e); reserve = 0; }
+    const finalPx = reserve ? px : '0px';
+    if (finalPx !== this.bannerReserve) {
+      this.bannerReserve = finalPx;
+      document.documentElement.style.setProperty('--ad-bottom', finalPx);
+      window.dispatchEvent(new Event('resize')); // il canvas ricalcola la sua dimensione
+    }
   }
 
 
