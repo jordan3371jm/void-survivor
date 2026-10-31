@@ -234,6 +234,8 @@ export type UpgradeType = CoinUpgradeType | DiamondUpgradeType;
 
 export function getCoinUpgradeCost(stat: CoinUpgradeType, currentLevel: number): number {
   const baseCosts: Record<CoinUpgradeType, number> = { defense: 200, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
+  // DEF e' il potenziamento piu' forte: oltre al prezzo iniziale piu' alto, ogni livello rincara del 25% (gli altri del 15%)
+  if (stat === 'defense') return Math.round(baseCosts.defense * (1 + 0.25 * currentLevel));
   return linearCost(baseCosts[stat], currentLevel);
 }
 
