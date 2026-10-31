@@ -233,7 +233,7 @@ export type DiamondUpgradeType = 'luck' | 'expBonus';
 export type UpgradeType = CoinUpgradeType | DiamondUpgradeType;
 
 export function getCoinUpgradeCost(stat: CoinUpgradeType, currentLevel: number): number {
-  const baseCosts: Record<CoinUpgradeType, number> = { defense: 150, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
+  const baseCosts: Record<CoinUpgradeType, number> = { defense: 200, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
   return linearCost(baseCosts[stat], currentLevel);
 }
 

@@ -10,6 +10,7 @@ import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeA
 import { STORAGE_LATE_EVENT } from './game/storage';
 import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
+import { getLoginRewardsState, hasUnclaimedReward } from './game/loginRewards';
 import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
@@ -38,33 +39,33 @@ interface FinalStats {
 // La nave Buco Nero e' stata tolta (store.ts rimborsa chi l'aveva comprata).
 const SHIPS = [
   { type: 'starter', nameKey: 'ship_starter', price: 0, color: '#62f5cf', ability: 'homing_laser' },
-  { type: 'shield_ship', nameKey: 'ship_shield', price: 200, color: '#3dffaa', ability: 'energy_shield' },
-  { type: 'drone_ship', nameKey: 'ship_drone', price: 230, color: '#ffb02e', ability: 'drone_swarm' },
-  { type: 'mechanical_ship', nameKey: 'ship_mechanical', price: 260, color: '#c9d2e3', ability: 'orbiting_satellites' },
-  { type: 'bio_ship', nameKey: 'ship_bio', price: 300, color: '#ff5f8f', ability: 'corrosive_nebula' },
-  { type: 'gravity_ship', nameKey: 'ship_gravity', price: 350, color: '#c05bff', ability: 'gravity_waves' },
-  { type: 'federation_ship', nameKey: 'ship_federation', price: 400, color: '#e6ecf5', ability: 'energy_shield' },
-  { type: 'photon_ship', nameKey: 'ship_photon', price: 460, color: '#ff5555', ability: 'photon_gun' },
-  { type: 'ion_ship', nameKey: 'ship_ion', price: 530, color: '#6b7bff', ability: 'ion_gun' },
-  { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 610, color: '#ff4444', ability: 'probe_x' },
-  { type: 'probe_y_ship', nameKey: 'ship_probe_y', price: 700, color: '#4f6bff', ability: 'probe_y' },
-  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 810, color: '#5cffff', ability: 'quantum_bounce' },
-  { type: 'viper_ship', nameKey: 'ship_viper', price: 930, color: '#c0c8d8', ability: 'quantum_bounce' },
-  { type: 'electric_ship', nameKey: 'ship_electric', price: 1070, color: '#7cc4ff', ability: 'ion_storm' },
-  { type: 'meteor_ship', nameKey: 'ship_meteor', price: 1230, color: '#ff7a33', ability: 'meteor' },
-  { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 1420, color: '#5cff8a', ability: 'antimatter_bomb' },
-  { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1630, color: '#d19a66', ability: 'asteroid_fragment' },
-  { type: 'fire_ship', nameKey: 'ship_fire', price: 1870, color: '#ff6a2b', ability: 'plasma_flamethrower' },
-  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2150, color: '#aab4ff', ability: 'neutronium_boomerang' },
-  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2480, color: '#ff9a2e', ability: 'kinetic_darts' },
-  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 2850, color: '#a3acc2', ability: 'kinetic_darts' },
-  { type: 'shadow_ship', nameKey: 'ship_shadow', price: 3270, color: '#9f8cff', ability: 'gravity_field' },
-  { type: 'laser_ship', nameKey: 'ship_laser', price: 3760, color: '#ff4d5e', ability: 'laser_swords' },
-  { type: 'cryo_ship', nameKey: 'ship_cryo', price: 4330, color: '#4ff0ff', ability: 'cryo_lance' },
-  { type: 'void_ship', nameKey: 'ship_void', price: 4980, color: '#e35bff', ability: 'void_lance' },
+  { type: 'shield_ship', nameKey: 'ship_shield', price: 150, color: '#3dffaa', ability: 'energy_shield' },
+  { type: 'cryo_ship', nameKey: 'ship_cryo', price: 250, color: '#4ff0ff', ability: 'cryo_lance' },
+  { type: 'mechanical_ship', nameKey: 'ship_mechanical', price: 350, color: '#c9d2e3', ability: 'orbiting_satellites' },
+  { type: 'bio_ship', nameKey: 'ship_bio', price: 450, color: '#ff5f8f', ability: 'corrosive_nebula' },
+  { type: 'photon_ship', nameKey: 'ship_photon', price: 600, color: '#ff5555', ability: 'photon_gun' },
+  { type: 'ion_ship', nameKey: 'ship_ion', price: 750, color: '#6b7bff', ability: 'ion_gun' },
+  { type: 'drone_ship', nameKey: 'ship_drone', price: 900, color: '#ffb02e', ability: 'drone_swarm' },
+  { type: 'gravity_ship', nameKey: 'ship_gravity', price: 1100, color: '#c05bff', ability: 'gravity_waves' },
+  { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 1300, color: '#ff4444', ability: 'probe_x' },
+  { type: 'probe_y_ship', nameKey: 'ship_probe_y', price: 1500, color: '#4f6bff', ability: 'probe_y' },
+  { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1750, color: '#d19a66', ability: 'asteroid_fragment' },
+  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 2000, color: '#5cffff', ability: 'quantum_bounce' },
+  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2300, color: '#aab4ff', ability: 'neutronium_boomerang' },
+  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2600, color: '#ff9a2e', ability: 'kinetic_darts' },
+  { type: 'electric_ship', nameKey: 'ship_electric', price: 3000, color: '#7cc4ff', ability: 'ion_storm' },
+  { type: 'meteor_ship', nameKey: 'ship_meteor', price: 3400, color: '#ff7a33', ability: 'meteor' },
+  { type: 'fire_ship', nameKey: 'ship_fire', price: 3900, color: '#ff6a2b', ability: 'plasma_flamethrower' },
+  { type: 'viper_ship', nameKey: 'ship_viper', price: 4400, color: '#c0c8d8', ability: 'prism_ray' },
+  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 5000, color: '#a3acc2', ability: 'arc_slash' },
+  { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 5700, color: '#5cff8a', ability: 'antimatter_bomb' },
+  { type: 'shadow_ship', nameKey: 'ship_shadow', price: 6500, color: '#9f8cff', ability: 'gravity_field' },
+  { type: 'federation_ship', nameKey: 'ship_federation', price: 7400, color: '#e6ecf5', ability: 'void_lance' },
+  { type: 'laser_ship', nameKey: 'ship_laser', price: 8500, color: '#ff4d5e', ability: 'laser_swords' },
+  { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole' },
 ];
 
-const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y'];
+const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
 const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
 
 /** Testi brevi non presenti nel file delle traduzioni. */
@@ -183,7 +184,7 @@ export default function App() {
   }, []);
 
   // Tema chiaro/scuro: attributo su <html> (il CSS fa il resto; "auto" segue il dispositivo)
-  const theme = store.settings.theme || 'auto';
+  const theme = store.settings.theme || 'dark';
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
@@ -983,12 +984,14 @@ export default function App() {
   // ---------------------------------------------------------------------------
   if (screen === 'home') {
     const missionsClaimable = countClaimable();
+    // pallino sul regalo finche' la ricompensa di oggi non e' stata presa
+    let dailyReady = false; try { dailyReady = hasUnclaimedReward(getLoginRewardsState()); } catch { /* ignora */ }
     const unclaimedAchievements = store.userProfile?.completedAchievements?.filter(c => !c.claimed).length || 0;
     const currentShipInfo = SHIPS.find(s => s.type === store.currentShip) || SHIPS[0];
     const boostActive = store.settings.speedMultiplier === 2 && store.settings.speedBoostTimer > 0 && !store.settings.speedBoostPaused;
     const boostPaused = store.settings.speedBoostPaused && store.settings.speedBoostTimer > 0;
     const dock = [
-      { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold' },
+      { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold', badge: dailyReady ? 1 : 0 },
       { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green', badge: missionsClaimable },
       { key: 'achievements', label: clean(t(lang, 'achievements')), icon: <Target size={20} />, onClick: () => setShowAchievementsModal(true), tone: 'orange', badge: unclaimedAchievements },
       { key: 'speed', label: clean(t(lang, 'speed_select')), icon: <Zap size={20} />, onClick: () => setShowSpeedModal(true), tone: 'cyan' },
@@ -1344,7 +1347,7 @@ export default function App() {
               <h2 className="vs-panel-title"><SunMoon size={18} />{t(lang, 'theme')}</h2>
               <div className="vs-lang-grid">
                 {(['auto', 'light', 'dark'] as const).map(th => (
-                  <button key={th} type="button" className={`vs-lang${(store.settings.theme || 'auto') === th ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}>
+                  <button key={th} type="button" className={`vs-lang${(store.settings.theme || 'dark') === th ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}>
                     {t(lang, `theme_${th}`)}
                   </button>
                 ))}

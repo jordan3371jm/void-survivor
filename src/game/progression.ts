@@ -29,6 +29,8 @@ export const EVOLUTIONS: Partial<Record<AbilityType, AbilityType>> = {
   stellar_blackhole: 'passive_cosmic_dust',
   probe_x: 'passive_galactic_crown',
   probe_y: 'passive_galactic_coin',
+  prism_ray: 'passive_molecular_replicator',
+  arc_slash: 'passive_stellar_candelabrum',
 };
 
 let pid = 0;

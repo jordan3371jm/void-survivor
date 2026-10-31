@@ -1,5 +1,6 @@
 import { appBossName, isApp } from './appNames';
 import { plFromEn } from './pl';
+import type { NebulaPool } from './types';
 import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, Ability, AbilityType, LevelUpChoice, Vector2, EnemyType, ShipType, DamageNumber, GameMode } from './types';
 import { playShoot, playPassiveSound, playHit } from './audio';
 import { getAbilityInfo } from './abilityInfo';
@@ -101,7 +102,7 @@ export function getAbilitySprite(type: string): HTMLImageElement | null {
   return loadImage(`abilities/${type}.webp`);
 }
 
-const ABILITY_SPRITE_TYPES = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'probe_x', 'probe_y', 'passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
+const ABILITY_SPRITE_TYPES = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'prism_ray', 'arc_slash', 'probe_x', 'probe_y', 'passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
 
 const BOSS_ICON_TYPES: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
 
@@ -185,7 +186,7 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     case 'ion_ship': initialAbility = 'ion_gun'; break;
     case 'drone_ship': initialAbility = 'drone_swarm'; break;
     case 'gravity_ship': initialAbility = 'gravity_waves'; break;
-    case 'void_ship': initialAbility = 'void_lance'; break;
+    case 'void_ship': initialAbility = 'stellar_blackhole'; break;
     case 'cryo_ship': initialAbility = 'cryo_lance'; break;
     case 'shield_ship': initialAbility = 'energy_shield'; break;
     case 'asteroid_ship': initialAbility = 'asteroid_fragment'; break;
@@ -196,12 +197,10 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
     case 'blackhole_ship': initialAbility = 'stellar_blackhole'; break;
     case 'probe_x_ship': initialAbility = 'probe_x'; break;
     case 'probe_y_ship': initialAbility = 'probe_y'; break;
-    case 'tie_fighter_ship': initialAbility = 'kinetic_darts'; break;
-    case 'viper_ship': initialAbility = 'quantum_bounce'; break;
-    case 'federation_ship': initialAbility = 'energy_shield'; break;
+    case 'tie_fighter_ship': initialAbility = 'arc_slash'; break;
+    case 'viper_ship': initialAbility = 'prism_ray'; break;
+    case 'federation_ship': initialAbility = 'void_lance'; break;
   }
-  // Boss Rush: il Buco Nero (danno a tutto lo schermo) renderebbe la modalita' troppo facile
-  if (gameMode === 'boss_rush' && initialAbility === 'stellar_blackhole') initialAbility = 'gravity_waves';
   const player: Player = {
     id: 'player', pos: { x: 0, y: 0 }, vel: { x: 0, y: 0 }, radius: 15, hp: 100, maxHp: 100, damage: 10,
     exp: 0, level: 1, expToNext: 10, speed: 200, magnetRange: 80,
@@ -390,7 +389,8 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
-  if (type.startsWith('boss_') && state.gameMode === 'boss_rush') { const i = state.bossRushIndex || 0; base.hp = 1400 * (1 + i * 0.5) * (1 + i * 0.06) * (i >= 2 ? 1.15 : 1); }
+  // Boss Rush: stessa vita della modalita' normale (senza la crescita col tempo), un po' piu' bassa
+  if (type.startsWith('boss_') && state.gameMode === 'boss_rush') base.hp = (baseEnemies[type]?.hp || base.hp) / timeMultiplier * 0.8;
   // Mini boss: crescono come i boss; dal secondo giro (ondata 23 in poi) sono molto piu' forti
   if (type.startsWith('mini_')) { const cycle = Math.floor(Math.max(0, state.wave - 3) / 20); base.hp = base.hp * (1 + waveIdx * 0.12) * (1 + cycle * 2.5); }
   // Sciami: tantissimi ma con pochissima vita (non seguono la crescita normale)
@@ -454,7 +454,11 @@ function getAbilityTypeFromProjectile(projType: string): string | undefined {
     'antimatter_bomb_proj': 'antimatter_bomb',
     'probe_laser_red': 'probe_x',
     'probe_laser_blue': 'probe_y',
-    'cryo_beam': 'cryo_lance'
+    'cryo_beam': 'cryo_lance',
+    'flame_puff': 'plasma_flamethrower',
+    'prism_ray': 'prism_ray',
+    'prism_shard': 'prism_ray',
+    'arc_slash': 'arc_slash'
   };
   return mapping[projType];
 }
@@ -490,6 +494,7 @@ function processAbilities(state: GameState, dt: number): void {
       if (nebula.lifetime >= nebula.maxLifetime) state.nebulaPools.splice(i, 1);
       continue;
     }
+    if (nebula.pull) { const fade = 1 - nebula.lifetime / nebula.maxLifetime; for (const enemy of state.enemies) { if (enemy.isBoss) continue; const d = dist(nebula.pos, enemy.pos); if (d < nebula.radius * 1.15 && d > 6) { const k = nebula.pull * dt * fade * (0.35 + 0.65 * (1 - d / (nebula.radius * 1.15))); enemy.pos.x += (nebula.pos.x - enemy.pos.x) / d * k; enemy.pos.y += (nebula.pos.y - enemy.pos.y) / d * k; } } }
     for (const enemy of state.enemies) { const d = dist(nebula.pos, enemy.pos); if (d < nebula.radius + enemy.radius) { enemy.hp -= nebula.damage * dt; spawnDamageNumber(state, enemy.pos, nebula.damage * dt, nebula.color, false, nebula.source || 'corrosive_nebula'); spawnParticles(state, enemy.pos, nebula.color, 1); } }
     if (nebula.lifetime >= nebula.maxLifetime) state.nebulaPools.splice(i, 1);
   }
@@ -531,7 +536,7 @@ function processAbilities(state: GameState, dt: number): void {
     // Senza bersaglio l'abilita' riprova al frame successivo (prima sprecava l'intera ricarica).
     // Il Buco Nero resta escluso: parte con la ricarica piena per non sprecarsi sul primo nemico.
     if (!nearest && ability.type !== 'energy_shield' && ability.type !== 'laser_swords') {
-      ability.timer = ability.type === 'stellar_blackhole' ? ability.cooldown * cdMul : 0;
+      ability.timer = 0;
       continue;
     }
     // Il Tomo del Vuoto (riduzione ricarica) vale per TUTTE le abilita' (prima solo per alcune)
@@ -565,8 +570,14 @@ function processAbilities(state: GameState, dt: number): void {
       }
       case 'void_lance': {
         if (!nearest) break;
+        // Lancia del Vuoto: lance velocissime che trapassano tutto e alla fine aprono uno squarcio che risucchia
         const a = angle(player.pos, nearest.pos);
-        state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a) * 500, y: Math.sin(a) * 500 }, radius: 5, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 2, maxLifetime: 2, type: 'void_lance', piercing: lvl + 2, color: ability.color, trail: [] });
+        const lances = Math.floor((1 + Math.floor(lvl / 4)) * (1 + player.projectileCountBonus));
+        const sp = 950 * (1 + player.projectileSpeedBonus);
+        for (let i = 0; i < lances; i++) {
+          const off = (i - (lances - 1) / 2) * 0.16;
+          state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a + off) * sp, y: Math.sin(a + off) * sp }, radius: 11, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 0.65, maxLifetime: 0.65, type: 'void_lance', piercing: 999, aoeRadius: (55 + lvl * 7) * (1 + player.areaBonus), duration: 1.4 * (1 + player.durationBonus), color: ability.color, trail: [] });
+        }
         player.shootFlash = 1; playShoot('void_lance'); break;
       }
       case 'quantum_bounce': {
@@ -608,7 +619,7 @@ function processAbilities(state: GameState, dt: number): void {
       }
       case 'energy_shield': { player.shieldHits = lvl; playShoot('energy_shield'); break; }
       case 'laser_swords': { const swordCount = Math.min(lvl, 5); while (state.laserSwords.length > swordCount) state.laserSwords.pop(); while (state.laserSwords.length < swordCount) state.laserSwords.push({ id: genId(), angle: 0, distance: 60, length: 30, damage: dmg, color: ability.color }); const swordBase = state.laserSwords.length > 0 ? state.laserSwords[0].angle : 0; for (let i = 0; i < state.laserSwords.length; i++) { state.laserSwords[i].angle = swordBase + (i / swordCount) * Math.PI * 2; state.laserSwords[i].damage = dmg; state.laserSwords[i].length = (30 + lvl * 5) * (1 + player.areaBonus); } playShoot('laser_swords'); break; }
-      case 'plasma_flamethrower': { const baseAngle = nearest ? angle(player.pos, nearest.pos) : Math.random() * Math.PI * 2; const flames = lvl >= 3 ? 2 : 1; for (let fi = 0; fi < flames; fi++) { const randomAngle = baseAngle + (Math.random() - 0.5) * 0.7; state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(randomAngle) * 350, y: Math.sin(randomAngle) * 350 }, radius: 12, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 2, maxLifetime: 2, type: 'plasma_ball', piercing: 3 + lvl, color: ability.color, trail: [] }); } player.shootFlash = 1; playShoot('plasma_flamethrower'); break; }
+      case 'plasma_flamethrower': { /* getto di fiamme a cono: tante fiammate che si allargano e attraversano i nemici */ const baseAngle = nearest ? angle(player.pos, nearest.pos) : Math.random() * Math.PI * 2; const puffs = Math.floor((7 + lvl) * (1 + player.projectileCountBonus * 0.5)); const cone = 0.45 + lvl * 0.02; const reach = 1 + player.areaBonus; for (let fi = 0; fi < puffs; fi++) { const ra = baseAngle + (Math.random() - 0.5) * cone; const v = (330 + Math.random() * 140) * reach * (1 + player.projectileSpeedBonus * 0.5); const life = 0.5 + Math.random() * 0.15; state.projectiles.push({ id: genId(), pos: { x: player.pos.x + Math.cos(ra) * 14, y: player.pos.y + Math.sin(ra) * 14 }, vel: { x: Math.cos(ra) * v, y: Math.sin(ra) * v }, radius: 7 + Math.random() * 3, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: life, maxLifetime: life, type: 'flame_puff', piercing: 999, color: ability.color }); } player.shootFlash = 1; playShoot('plasma_flamethrower'); break; }
       case 'gravity_field': { const fieldRadius = (150 + lvl * 20) * (1 + player.areaBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); for (const enemy of state.enemies) { const d = dist(player.pos, enemy.pos); if (d < fieldRadius) { const damage = dmg * 0.5; enemy.hp -= damage; spawnDamageNumber(state, enemy.pos, damage, ability.color, false, 'gravity_field'); if (!(enemy.freezeTimer && enemy.freezeTimer > 0)) { if (!(enemy.slowTimer && enemy.slowTimer > 0)) enemy.baseSpeed = enemy.speed; enemy.slowTimer = Math.max(0.05, ability.cooldown * cdMul) + 0.3; enemy.speed = (enemy.baseSpeed || enemy.speed) * 0.7; } const pullDir = normalize({ x: player.pos.x - enemy.pos.x, y: player.pos.y - enemy.pos.y }); enemy.vel.x += pullDir.x * 20; enemy.vel.y += pullDir.y * 20; spawnParticles(state, enemy.pos, ability.color, 1); } } playShoot('gravity_field'); break; }
       case 'corrosive_nebula': { 
         const poolCount = Math.min(lvl, 3); 
@@ -627,7 +638,41 @@ function processAbilities(state: GameState, dt: number): void {
         playShoot('corrosive_nebula'); break; 
       }
       case 'ion_storm': { const strikeCount = Math.floor((2 + lvl) * (1 + player.projectileCountBonus)); const radius = 40 * (1 + player.areaBonus); const duration = 2 * (1 + player.durationBonus); const shapes: ('circle' | 'star' | 'square')[] = ['circle', 'star', 'square']; for (let i = 0; i < strikeCount; i++) { const target = state.enemies[Math.floor(Math.random() * state.enemies.length)]; if (target) { state.projectiles.push({ id: genId(), pos: { x: target.pos.x, y: target.pos.y - 300 }, vel: { x: 0, y: 800 * (1 + player.projectileSpeedBonus) }, radius: 8, hp: 1, maxHp: 1, damage: 0, fromPlayer: true, lifetime: 0.5, maxLifetime: 0.5, type: 'lightning_bolt', aoeRadius: radius, color: ability.color, trail: [] }); state.stormHitboxes.push({ id: genId(), pos: { x: target.pos.x, y: target.pos.y }, radius, damage: dmg * 0.4, color: ability.color, lifetime: 0, maxLifetime: duration, shape: shapes[Math.floor(Math.random() * shapes.length)], rotation: 0 }); } } playShoot('ion_storm'); break; }
-      case 'stellar_blackhole': { const blackholeDamage = 1000; ability.timer = (135 - 15 * lvl) * (1 - player.cooldownReduction); for (const enemy of state.enemies) { enemy.hp -= blackholeDamage; spawnDamageNumber(state, enemy.pos, blackholeDamage, '#ffffff', false, 'stellar_blackhole'); spawnParticles(state, enemy.pos, '#ffffff', 5); } state.screenShake = 0.5; playShoot('stellar_blackhole'); break; }
+      case 'stellar_blackhole': {
+        // Singolarita': un piccolo buco nero nel punto piu' affollato vicino al bersaglio, risucchia e stritola i nemici
+        if (!nearest) break;
+        let target = nearest.pos; let best = -1;
+        for (let k = 0; k < Math.min(state.enemies.length, 30); k++) { const e = state.enemies[k]; if (dist(e.pos, player.pos) > 650) continue; let n = 0; for (const o of state.enemies) if (dist(o.pos, e.pos) < 140) n++; if (n > best) { best = n; target = e.pos; } }
+        const r = (95 + lvl * 9) * (1 + player.areaBonus);
+        const holes = lvl >= 7 ? 2 : 1;
+        for (let h = 0; h < holes; h++) {
+          const p = h === 0 ? { x: target.x, y: target.y } : { x: nearest.pos.x + (Math.random() - 0.5) * 160, y: nearest.pos.y + (Math.random() - 0.5) * 160 };
+          state.nebulaPools.push({ id: genId(), pos: p, radius: r, damage: dmg, color: ability.color, lifetime: 0, maxLifetime: 2.6 * (1 + player.durationBonus), source: 'stellar_blackhole', kind: 'singularity', pull: 140 + lvl * 12 });
+        }
+        state.screenShake = Math.max(state.screenShake, 0.15); playShoot('stellar_blackhole'); break;
+      }
+      case 'prism_ray': {
+        // Raggio Prismatico: un raggio di luce bianca che al primo impatto si scompone in schegge arcobaleno
+        if (!nearest) break;
+        const a = angle(player.pos, nearest.pos);
+        const rays = Math.floor((1 + (lvl >= 6 ? 1 : 0)) * (1 + player.projectileCountBonus));
+        const sp = 820 * (1 + player.projectileSpeedBonus);
+        for (let i = 0; i < rays; i++) { const off = (i - (rays - 1) / 2) * 0.22; state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a + off) * sp, y: Math.sin(a + off) * sp }, radius: 8, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 1.1, maxLifetime: 1.1, type: 'prism_ray', aoeRadius: 4 + Math.floor(lvl / 2) + (ability.evolved ? 2 : 0), color: ability.color, trail: [] }); }
+        player.shootFlash = 1; playShoot('prism_ray'); break;
+      }
+      case 'arc_slash': {
+        // Fendente ad Arco: mezzelune di energia che tagliano tutto quello che incontrano
+        if (!nearest) break;
+        const a = angle(player.pos, nearest.pos);
+        const dirs = [a];
+        if (lvl >= 4) dirs.push(a + Math.PI);
+        if (lvl >= 8) { dirs.push(a + Math.PI / 2); dirs.push(a - Math.PI / 2); }
+        if (ability.evolved) for (const d0 of [...dirs]) dirs.push(d0 + Math.PI / 4);
+        const sp = 560 * (1 + player.projectileSpeedBonus);
+        const r = (40 + lvl * 3) * (1 + player.areaBonus);
+        for (const d0 of dirs) state.projectiles.push({ id: genId(), pos: { x: player.pos.x + Math.cos(d0) * 20, y: player.pos.y + Math.sin(d0) * 20 }, vel: { x: Math.cos(d0) * sp, y: Math.sin(d0) * sp }, radius: r, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 0.55 * (1 + player.durationBonus * 0.5), maxLifetime: 0.55 * (1 + player.durationBonus * 0.5), type: 'arc_slash', piercing: 999, color: ability.color });
+        player.shootFlash = 1; playShoot('arc_slash'); break;
+      }
       case 'orbiting_satellites': { playShoot('orbiting_satellites'); break; }
       case 'asteroid_fragment': { if (!nearest) break; const a = angle(player.pos, nearest.pos); const fragmentCount = 3 + Math.floor(lvl / 2); for (let i = 0; i < fragmentCount; i++) { const spread = (i - Math.floor(fragmentCount / 2)) * 0.3; state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a + spread) * 400, y: Math.sin(a + spread) * 400 }, radius: 8, hp: 1, maxHp: 1, damage: dmg, fromPlayer: true, lifetime: 3, maxLifetime: 3, type: 'asteroid_frag', piercing: 5 + lvl, color: ability.color, trail: [] }); } player.shootFlash = 1; playShoot('asteroid_fragment'); break; }
       case 'meteor': { const meteorSpeed = 600 * (1 + player.projectileSpeedBonus); const meteorRadius = (15 + lvl * 2) * (1 + player.areaBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); state.projectiles.push({ id: genId(), pos: { x: nearest!.pos.x, y: nearest!.pos.y - meteorSpeed * 1.0 }, vel: { x: 0, y: meteorSpeed }, radius: meteorRadius, hp: 1, maxHp: 1, damage: dmg * 2, fromPlayer: true, lifetime: 1.5, maxLifetime: 1.5, type: 'meteor_proj', piercing: 3, aoeRadius: 60 + lvl * 10, color: ability.color, trail: [] }); player.shootFlash = 1; playShoot('meteor'); break; }
@@ -848,6 +893,12 @@ export function updateGame(state: GameState, dt: number): void {
     if (proj.type === 'boomerang_proj' && proj.fromPlayer) { const timeElapsed = proj.maxLifetime - proj.lifetime; if (timeElapsed > 1.0) { if (!(proj as any).returning) { (proj as any).returning = true; proj.hitIds = []; } const toP = normalize({ x: player.pos.x - proj.pos.x, y: player.pos.y - proj.pos.y }); const currentSpeed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = toP.x * currentSpeed; proj.vel.y = toP.y * currentSpeed; } }
     proj.pos.x += proj.vel.x * gameDt; proj.pos.y += proj.vel.y * gameDt; proj.lifetime -= gameDt;
     if (proj.trail) { proj.trail.push({ ...proj.pos }); if (proj.trail.length > 10) proj.trail.shift(); }
+    if (proj.type === 'flame_puff') { proj.radius += 46 * gameDt; proj.vel.x *= 1 - 1.6 * gameDt; proj.vel.y *= 1 - 1.6 * gameDt; }
+    if (proj.type === 'arc_slash') { proj.radius += 30 * gameDt; }
+    if (proj.type === 'void_lance' && proj.fromPlayer && proj.lifetime <= 0 && proj.aoeRadius) {
+      state.nebulaPools.push({ id: genId(), pos: { x: proj.pos.x, y: proj.pos.y }, radius: proj.aoeRadius, damage: proj.damage * 0.9, color: proj.color, lifetime: 0, maxLifetime: proj.duration || 1.4, source: 'void_lance', kind: 'rift', pull: 90 });
+      spawnParticles(state, proj.pos, proj.color, 8); proj.aoeRadius = 0;
+    }
     if (proj.type === 'meteor_proj' && proj.lifetime <= 0.5 && proj.vel.y > 0) { for (const enemy of state.enemies) { const d = dist(proj.pos, enemy.pos); if (d < (proj.aoeRadius || 60)) { enemy.hp -= proj.damage; spawnDamageNumber(state, enemy.pos, proj.damage, proj.color, false, 'meteor'); spawnParticles(state, enemy.pos, proj.color, 3); } } spawnParticles(state, proj.pos, proj.color, 10); state.screenShake = 0.3; proj.lifetime = 0; }
     if (proj.type === 'antimatter_bomb_proj' && proj.lifetime <= 0) {
       state.nebulaPools.push({ id: genId(), pos: { x: proj.pos.x, y: proj.pos.y }, radius: proj.aoeRadius || 100, damage: proj.damage, color: proj.color, lifetime: 0, maxLifetime: proj.duration || 5 });
@@ -869,6 +920,13 @@ export function updateGame(state: GameState, dt: number): void {
       }
       
       let finalDamage = proj.damage; const isCrit = Math.random() * 100 < player.critChance; if (isCrit) { finalDamage *= player.critDamage / 100; spawnParticles(state, enemy.pos, '#ffff00', 2); } enemy.hp -= finalDamage; const abilityType = getAbilityTypeFromProjectile(proj.type); spawnDamageNumber(state, enemy.pos, finalDamage, proj.color, isCrit, abilityType); spawnParticles(state, proj.pos, proj.color, 1); if (proj.aoeRadius) { for (const e of state.enemies) { if (dist(proj.pos, e.pos) < proj.aoeRadius && e !== enemy) { let aoeDmg = proj.damage * 0.5; if (isCrit) aoeDmg *= player.critDamage / 100; e.hp -= aoeDmg; spawnDamageNumber(state, e.pos, aoeDmg, proj.color, isCrit, abilityType); } } spawnParticles(state, proj.pos, proj.color, 4); }
+    if (proj.type === 'prism_ray') {
+      // il raggio si scompone in schegge arcobaleno che proseguono a ventaglio
+      const shards = proj.aoeRadius || 3; const base = Math.atan2(proj.vel.y, proj.vel.x); const spd = Math.hypot(proj.vel.x, proj.vel.y) * 0.8;
+      const hues = ['#ff4d6d', '#ffa94d', '#ffe66d', '#69f0ae', '#4dabff', '#b388ff'];
+      for (let s = 0; s < shards; s++) { const off = (s - (shards - 1) / 2) * (1.1 / Math.max(1, shards - 1)); state.projectiles.push({ id: genId(), pos: { ...proj.pos }, vel: { x: Math.cos(base + off) * spd, y: Math.sin(base + off) * spd }, radius: proj.evolved ? 7 : 5, hp: 1, maxHp: 1, damage: proj.damage * 0.6, fromPlayer: true, lifetime: 0.6, maxLifetime: 0.6, type: 'prism_shard', piercing: proj.evolved ? 3 : 1, hitIds: [enemy.id], color: hues[s % hues.length], trail: [] }); }
+      spawnParticles(state, proj.pos, '#ffffff', 6); playShoot('prism_split');
+    }
     if (proj.type === 'quantum_bounce_proj' && proj.bouncesLeft && proj.bouncesLeft > 0) {
       proj.bouncesLeft--; proj.lastHitEnemy = enemy.id;
       let nextTarget: Enemy | null = null; let minDist2 = Infinity;
@@ -1037,9 +1095,8 @@ export function updateGame(state: GameState, dt: number): void {
 }
 
 function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
-  const activeTypes: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'probe_x', 'probe_y'];
+  const activeTypes: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'antimatter_bomb', 'laser_swords', 'homing_laser', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'orbiting_satellites', 'plasma_flamethrower', 'gravity_field', 'corrosive_nebula', 'quantum_bounce', 'ion_storm', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
   const passiveTypes: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
-  if (state.gameMode === 'boss_rush') activeTypes.splice(activeTypes.indexOf('stellar_blackhole'), 1); // troppo forte contro i boss
   const ownedAbilities = state.player.abilities;
   const activeAbilities = ownedAbilities.filter(a => !a.type.startsWith('passive_'));
   const passiveAbilities = ownedAbilities.filter(a => a.type.startsWith('passive_'));
@@ -1322,10 +1379,10 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
     ctx.fillStyle = proj.color; ctx.fill();
   }
   ctx.restore();
-  for (const proj of state.projectiles) { ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { if (proj.evolved) { const pulse = 1.6 + Math.sin(state.time * 12 + proj.pos.x * 0.05) * 0.25; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, proj.radius * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
+  for (const proj of state.projectiles) { if (drawWeaponProjectile(ctx, proj, state)) continue; ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { if (proj.evolved) { const pulse = 1.6 + Math.sin(state.time * 12 + proj.pos.x * 0.05) * 0.25; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, proj.radius * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
   for (const p of state.particles) { const alpha = p.life / p.maxLife; ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.size * alpha, 0, Math.PI * 2); ctx.fill(); }
   if (showDamageNumbers) { for (const dmgNum of state.damageNumbers) { const alpha = dmgNum.lifetime / dmgNum.maxLifetime; const fontSize = dmgNum.isCrit ? 18 : 12; ctx.save(); ctx.globalAlpha = alpha; ctx.font = `bold ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.fillStyle = dmgNum.isCrit ? '#ffff00' : dmgNum.color; ctx.fillText(Math.floor(dmgNum.value).toString(), dmgNum.pos.x, dmgNum.pos.y); if (dmgNum.isCrit) { ctx.font = 'bold 9px monospace'; ctx.fillText('CRIT!', dmgNum.pos.x, dmgNum.pos.y - 12); } ctx.restore(); } }
-  for (const nebula of state.nebulaPools) { const alpha = 1 - (nebula.lifetime / nebula.maxLifetime); ctx.save(); ctx.globalAlpha = alpha * 0.5; const gradient = ctx.createRadialGradient(nebula.pos.x, nebula.pos.y, 0, nebula.pos.x, nebula.pos.y, nebula.radius); gradient.addColorStop(0, nebula.color + 'cc'); gradient.addColorStop(0.4, nebula.color + '88'); gradient.addColorStop(0.7, nebula.color + '44'); gradient.addColorStop(1, nebula.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = alpha * 0.3; ctx.strokeStyle = nebula.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius * (0.8 + Math.sin(state.time * 5) * 0.1), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 4; i++) { const angle = (i / 4) * Math.PI * 2 + state.time * 2; const dist = nebula.radius * 0.5; const px = nebula.pos.x + Math.cos(angle) * dist; const py = nebula.pos.y + Math.sin(angle) * dist; ctx.fillStyle = nebula.color; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
+  for (const nebula of state.nebulaPools) { if (nebula.kind) { drawSpecialPool(ctx, nebula, state); continue; } const alpha = 1 - (nebula.lifetime / nebula.maxLifetime); ctx.save(); ctx.globalAlpha = alpha * 0.5; const gradient = ctx.createRadialGradient(nebula.pos.x, nebula.pos.y, 0, nebula.pos.x, nebula.pos.y, nebula.radius); gradient.addColorStop(0, nebula.color + 'cc'); gradient.addColorStop(0.4, nebula.color + '88'); gradient.addColorStop(0.7, nebula.color + '44'); gradient.addColorStop(1, nebula.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = alpha * 0.3; ctx.strokeStyle = nebula.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius * (0.8 + Math.sin(state.time * 5) * 0.1), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 4; i++) { const angle = (i / 4) * Math.PI * 2 + state.time * 2; const dist = nebula.radius * 0.5; const px = nebula.pos.x + Math.cos(angle) * dist; const py = nebula.pos.y + Math.sin(angle) * dist; ctx.fillStyle = nebula.color; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
   for (const hitbox of state.stormHitboxes) { const alpha = 1 - (hitbox.lifetime / hitbox.maxLifetime); ctx.save(); ctx.translate(hitbox.pos.x, hitbox.pos.y); ctx.rotate(hitbox.rotation); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = hitbox.color; ctx.strokeStyle = hitbox.color; ctx.lineWidth = 2; if (hitbox.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, hitbox.radius, 0, Math.PI * 2); ctx.fill(); } else if (hitbox.shape === 'star') { ctx.beginPath(); for (let i = 0; i < 10; i++) { const ang = (i * Math.PI) / 5 - Math.PI / 2; const radius = i % 2 === 0 ? hitbox.radius : hitbox.radius * 0.5; const x = Math.cos(ang) * radius; const y = Math.sin(ang) * radius; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); ctx.fill(); } else if (hitbox.shape === 'square') { const size = hitbox.radius * 1.4; ctx.fillRect(-size / 2, -size / 2, size, size); } ctx.restore(); }
   for (const sword of state.laserSwords) { const sx = player.pos.x + Math.cos(sword.angle) * sword.distance; const sy = player.pos.y + Math.sin(sword.angle) * sword.distance; const ex = sx + Math.cos(sword.angle + Math.PI / 2) * sword.length; const ey = sy + Math.sin(sword.angle + Math.PI / 2) * sword.length; ctx.strokeStyle = sword.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(ex, ey); ctx.stroke(); }
   const orbitingSatellitesAbility = player.abilities.find(a => a.type === 'orbiting_satellites');
@@ -1857,3 +1914,77 @@ function getBossNameZH(key: string): string { const app = appBossName(key, 'zh')
 
 // Aiuti usati dal modulo dei boss
 export { genId as newId, spawnParticles, shieldPulse, spawnDamageNumber };
+
+
+/** Proiettili con un aspetto dedicato (Lancia del Vuoto, fiamme, prisma, fendenti). Ritorna true se disegnato. */
+function drawWeaponProjectile(ctx: CanvasRenderingContext2D, proj: Projectile, state: GameState): boolean {
+  const t = proj.type;
+  if (t !== 'void_lance' && t !== 'flame_puff' && t !== 'prism_ray' && t !== 'prism_shard' && t !== 'arc_slash') return false;
+  const rot = Math.atan2(proj.vel.y, proj.vel.x);
+  ctx.save();
+  if (t === 'void_lance') {
+    // scia viola + punta di lancia luminosa
+    if (proj.trail && proj.trail.length > 1) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 1; i < proj.trail.length; i++) { const a = i / proj.trail.length; ctx.strokeStyle = proj.color; ctx.globalAlpha = a * 0.5; ctx.lineWidth = 2 + a * 7; ctx.beginPath(); ctx.moveTo(proj.trail[i - 1].x, proj.trail[i - 1].y); ctx.lineTo(proj.trail[i].x, proj.trail[i].y); ctx.stroke(); }
+      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    }
+    ctx.translate(proj.pos.x, proj.pos.y); ctx.rotate(rot);
+    const L = proj.evolved ? 40 : 32;
+    const g = ctx.createLinearGradient(-L, 0, L, 0); g.addColorStop(0, 'rgba(60,0,90,0)'); g.addColorStop(0.45, proj.color); g.addColorStop(1, '#ffffff');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(L, 0); ctx.lineTo(L * 0.25, -6); ctx.lineTo(-L, -2); ctx.lineTo(-L, 2); ctx.lineTo(L * 0.25, 6); ctx.closePath(); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.45 + Math.sin(state.time * 30) * 0.15; ctx.fillStyle = proj.color; ctx.beginPath(); ctx.ellipse(L * 0.3, 0, L * 0.8, 9, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (t === 'flame_puff') {
+    const k = 1 - proj.lifetime / proj.maxLifetime;
+    ctx.translate(proj.pos.x, proj.pos.y); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.max(0, 1 - k * k) * 0.85;
+    const r = proj.radius; const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, k < 0.35 ? '#fffbe0' : '#ffd36b'); g.addColorStop(0.35, proj.evolved ? '#ff9a2e' : '#ffae3d'); g.addColorStop(0.7, k < 0.6 ? '#ff5a14' : '#b8260a'); g.addColorStop(1, 'rgba(120,20,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  } else if (t === 'prism_ray') {
+    if (proj.trail && proj.trail.length > 1) { const tail = proj.trail[0]; const g = ctx.createLinearGradient(tail.x, tail.y, proj.pos.x, proj.pos.y); g.addColorStop(0, 'rgba(255,77,109,0)'); g.addColorStop(0.3, 'rgba(255,230,109,0.6)'); g.addColorStop(0.6, 'rgba(105,240,174,0.8)'); g.addColorStop(0.85, 'rgba(77,171,255,0.9)'); g.addColorStop(1, '#ffffff'); ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = g; ctx.lineWidth = proj.evolved ? 7 : 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tail.x, tail.y); ctx.lineTo(proj.pos.x, proj.pos.y); ctx.stroke(); }
+    ctx.translate(proj.pos.x, proj.pos.y); ctx.rotate(rot); ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(0, -6); ctx.lineTo(-8, 0); ctx.lineTo(0, 6); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 0.5; ctx.fillStyle = proj.evolved ? '#ffd86b' : '#bfe8ff'; ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill();
+  } else if (t === 'prism_shard') {
+    if (proj.trail && proj.trail.length > 1) { const tail = proj.trail[0]; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = proj.color; ctx.globalAlpha = 0.6; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(tail.x, tail.y); ctx.lineTo(proj.pos.x, proj.pos.y); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.translate(proj.pos.x, proj.pos.y); ctx.rotate(rot); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.8, 0); ctx.lineTo(-proj.radius, -proj.radius * 0.7); ctx.lineTo(-proj.radius * 0.4, 0); ctx.lineTo(-proj.radius, proj.radius * 0.7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(proj.radius * 0.5, 0, proj.radius * 0.35, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // fendente a mezzaluna
+    const k = proj.lifetime / proj.maxLifetime; const r = proj.radius;
+    ctx.translate(proj.pos.x, proj.pos.y); ctx.rotate(rot); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = Math.min(1, k * 1.6);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = proj.color; ctx.globalAlpha *= 0.35; ctx.lineWidth = r * 0.55; ctx.beginPath(); ctx.arc(-r * 0.5, 0, r, -1.05, 1.05); ctx.stroke();
+    ctx.globalAlpha = Math.min(1, k * 1.6); ctx.lineWidth = r * 0.22; ctx.beginPath(); ctx.arc(-r * 0.5, 0, r, -1.0, 1.0); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = Math.max(2, r * 0.07); ctx.beginPath(); ctx.arc(-r * 0.5, 0, r * 1.02, -0.85, 0.85); ctx.stroke();
+  }
+  ctx.restore();
+  return true;
+}
+
+/** Singolarita' del Buco Nero e squarci della Lancia del Vuoto. */
+function drawSpecialPool(ctx: CanvasRenderingContext2D, pool: NebulaPool, state: GameState): void {
+  const life = pool.lifetime / pool.maxLifetime;
+  const appear = Math.min(1, pool.lifetime * 5); const fade = Math.min(1, (1 - life) * 4);
+  const a = appear * fade; const r = pool.radius * (0.6 + 0.4 * appear);
+  const { x, y } = pool.pos;
+  ctx.save();
+  if (pool.kind === 'singularity') {
+    // disco di accrescimento che ruota + nucleo nero
+    ctx.globalAlpha = a * 0.55; const g = ctx.createRadialGradient(x, y, r * 0.15, x, y, r); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.35, pool.color + 'aa'); g.addColorStop(0.6, '#ff9d4d55'); g.addColorStop(1, pool.color + '00');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineWidth = 2.5;
+    for (let i = 0; i < 5; i++) { const st = state.time * (3.2 - i * 0.35) + i * 1.3; const rr = r * (0.3 + i * 0.13); ctx.strokeStyle = i % 2 ? '#ffb36b' : pool.color; ctx.globalAlpha = a * (0.75 - i * 0.1); ctx.beginPath(); ctx.arc(x, y, rr, st, st + Math.PI * 1.1); ctx.stroke(); }
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = a;
+    ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(x, y, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffe2b0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r * 0.21, 0, Math.PI * 2); ctx.stroke();
+  } else {
+    // squarcio del vuoto: fenditura viola che pulsa
+    ctx.translate(x, y); ctx.rotate(pool.id.length + state.time * 0.4);
+    ctx.globalAlpha = a * 0.4; const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r); g.addColorStop(0, pool.color + 'cc'); g.addColorStop(1, pool.color + '00'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = a; ctx.globalCompositeOperation = 'lighter'; const w = r * 0.18 * (1 + Math.sin(state.time * 18) * 0.15);
+    ctx.fillStyle = pool.color; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.75, w, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#12001f'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.62, w * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}

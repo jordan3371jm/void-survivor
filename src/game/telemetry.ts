@@ -5,7 +5,7 @@
 import type { GameState } from './types';
 import { storageGetItem, storageSetItem } from './storage';
 
-export const GAME_VERSION = '1.7.0';
+export const GAME_VERSION = '1.8.0';
 const TIME_MILESTONES = [180, 300, 600]; // 3, 5 e 10 minuti di partita
 
 function send(name: string, data?: Record<string, string | number | boolean>): void {

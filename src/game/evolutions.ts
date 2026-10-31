@@ -29,6 +29,8 @@ export const EVOLUTION_INFO: Partial<Record<AbilityType, Evo>> = {
   ion_storm: { names: ['Fulmine della Forza', 'Force Lightning', 'Relámpago de la Fuerza', 'Éclair de Force', '原力闪电', 'Błyskawica pustki'], color: '#c48bff' },
   stellar_blackhole: { names: ['Gargantua', 'Gargantua', 'Gargantúa', 'Gargantua', '卡冈图雅', 'Gargantua'], color: '#ffcf70' },
   probe_x: { names: ['Squadrone Fenice', 'Phoenix Squadron', 'Escuadrón Fénix', 'Escadron Phénix', '凤凰中队', 'Eskadra feniks'], color: '#ffe9a8' },
+  prism_ray: { names: ['Cascata Spettrale', 'Spectrum Cascade', 'Cascada Espectral', 'Cascade Spectrale', '光谱瀑流', 'Kaskada widma'], color: '#ffd86b' },
+  arc_slash: { names: ['Tempesta di Lame', 'Blade Tempest', 'Tempestad de Filos', 'Tempête de Lames', '刃之风暴', 'Burza ostrzy'], color: '#ffe066' },
   probe_y: { names: ['Squadrone Sith', 'Sith Squadron', 'Escuadrón Sith', 'Escadron Sith', '西斯中队', 'Eskadra cienia'], color: '#a26bff' },
 };
 

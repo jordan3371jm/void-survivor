@@ -182,6 +182,10 @@ export interface NebulaPool {
   maxLifetime: number;
   source?: string; // abilita' che l'ha creata (per le statistiche dei danni)
   hostile?: boolean; // creata da un boss: danneggia il giocatore, non i nemici
+  /** aspetto e comportamento speciali: singolarita' (attira i nemici) o squarcio del vuoto */
+  kind?: 'singularity' | 'rift';
+  /** forza con cui attira i nemici verso il centro (px/s) */
+  pull?: number;
 }
 
 export interface StormHitbox {
@@ -212,7 +216,7 @@ export type AbilityType =
   | 'laser_swords' | 'homing_laser' | 'kinetic_darts' | 'meteor'
   | 'neutronium_boomerang' | 'orbiting_satellites' | 'plasma_flamethrower'
   | 'gravity_field' | 'corrosive_nebula' | 'quantum_bounce' | 'ion_storm'
-  | 'stellar_blackhole' | 'probe_x' | 'probe_y'
+  | 'stellar_blackhole' | 'probe_x' | 'probe_y' | 'prism_ray' | 'arc_slash'
   | 'passive_fusion_core' | 'passive_plating' | 'passive_neutronium_heart'
   | 'passive_regen_core' | 'passive_void_tome' | 'passive_stellar_candelabrum'
   | 'passive_kinetic_accelerator' | 'passive_quantum_binder' | 'passive_molecular_replicator'
@@ -299,7 +303,8 @@ export type ProjectileType =
   | 'kinetic_dart' | 'meteor_proj' | 'boomerang_proj' | 'plasma_ball'
   | 'nebula_pool' | 'quantum_proj' | 'quantum_bounce_proj' | 'lightning_bolt' | 'blackhole_wave'
   | 'probe_laser_red' | 'probe_laser_blue' | 'bullet'
-  | 'boss_laser_big' | 'boss_laser_small' | 'acid_blob' | 'tractor_beam' | 'boss_bolt';
+  | 'boss_laser_big' | 'boss_laser_small' | 'acid_blob' | 'tractor_beam' | 'boss_bolt'
+  | 'flame_puff' | 'prism_ray' | 'prism_shard' | 'arc_slash';
 
 export interface LevelUpChoice {
   type: 'ability' | 'upgrade' | 'stat';
