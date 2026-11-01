@@ -52,9 +52,8 @@ export function rollEnemyDrop(state: GameState, pos: Vector2): void {
 function openChest(state: GameState, upgradeAbility: (a: any) => any, applyPassives: () => void): ChestReward[] {
   const p = state.player;
   const rewards: ChestReward[] = [];
-  // 1) evoluzione, se possibile (prima arma idonea)
-  const owned = new Set(p.abilities.map(a => a.type));
-  const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type] && owned.has(EVOLUTIONS[a.type]!));
+  // 1) evoluzione: la prima arma al livello massimo si evolve (non serve piu' la passiva abbinata)
+  const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type]);
   if (evo) {
     evo.evolved = true;
     state.evolutionsDone = (state.evolutionsDone || 0) + 1;

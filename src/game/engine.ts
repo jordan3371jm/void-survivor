@@ -1,6 +1,7 @@
 import { appBossName, isApp } from './appNames';
 import { plFromEn } from './pl';
 import type { NebulaPool } from './types';
+import { drawEvolvedProjectile, drawEvolvedOverlays } from './evoFx';
 import { GameState, Player, Enemy, Projectile, Particle, ExpOrb, Star, Nebula, Ability, AbilityType, LevelUpChoice, Vector2, EnemyType, ShipType, DamageNumber, GameMode } from './types';
 import { playShoot, playPassiveSound, playHit } from './audio';
 import { getAbilityInfo } from './abilityInfo';
@@ -401,8 +402,13 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   const curseMul = type.startsWith('boss_') ? 1 : 1 + Math.max(0, state.player.curseLevel) / 100;
   // I danni dei nemici crescono col tempo (prima restavano 10 per tutta la partita: con un po' di armatura si era invincibili)
   // Danni: bassi all'inizio (meta' di prima), +12% per ogni ondata
-  const dmgMul = 0.5 * (1 + waveIdx * 0.12) * (state.gameMode === 'endless' && state.wave > 40 ? 1 + (state.wave - 40) * 0.05 : 1);
-  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 30 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
+  let dmgMul = 0.5 * (1 + waveIdx * 0.12) * (state.gameMode === 'endless' && state.wave > 40 ? 1 + (state.wave - 40) * 0.05 : 1);
+  // Dal 4o boss sconfitto in poi i nemici normali hanno sempre piu' vita e danno (e arrivano piu' numerosi, vedi spawn)
+  const bossStep = postBossStep(state);
+  if (bossStep > 0 && !type.startsWith('boss_')) { base.hp *= 1 + bossStep * 0.3; dmgMul *= 1 + bossStep * 0.15; }
+  // Endless: finito il giro degli 8 boss, quelli successivi tornano sempre piu' forti
+  if (type.startsWith('boss_') && state.gameMode === 'endless') { const cycle = Math.floor(Math.max(0, (state.bossSpawnCount || 1) - 1) / 8); if (cycle > 0) { base.hp *= 1 + cycle * 0.8; dmgMul *= 1 + cycle * 0.3; } }
+  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 36 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
 }
 
 // Modalita' leggera (dispositivi lenti, vedi App.tsx): meno particelle e niente bagliori
@@ -544,7 +550,7 @@ function processAbilities(state: GameState, dt: number): void {
     const lvl = ability.level;
     const attackBonus = player.abilityAttackBonuses[ability.type] || 0;
     const dmg = (ability.damage + attackBonus) * (1 + (player.damage - 10) * 0.05) * player.weaponPower;
-    const projBefore = state.projectiles.length;
+    const projBefore = state.projectiles.length; const poolsBefore = state.nebulaPools.length;
     switch (ability.type) {
       case 'photon_gun': {
         const projectileCount = 4 * (1 + player.projectileCountBonus);
@@ -690,7 +696,7 @@ function processAbilities(state: GameState, dt: number): void {
       case 'neutronium_boomerang': { if (!nearest) break; const a = angle(player.pos, nearest.pos); const boomerangSpeed = 500 * (1 + player.projectileSpeedBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a) * boomerangSpeed, y: Math.sin(a) * boomerangSpeed }, radius: 10 * (1 + player.areaBonus), hp: 1, maxHp: 1, damage: dmg * 1.5, fromPlayer: true, lifetime: 3, maxLifetime: 3, type: 'boomerang_proj', piercing: 100, color: ability.color, trail: [] }); player.shootFlash = 1; playShoot('neutronium_boomerang'); break; }
       case 'probe_x': case 'probe_y': { ensureProbe(state, ability.type, dmg, lvl); ability.timer = 0.5; break; }
     }
-    if (ability.evolved) for (let k = projBefore; k < state.projectiles.length; k++) { const pr = state.projectiles[k]; pr.evolved = true; pr.radius *= 1.3; pr.color = ability.color; }
+    if (ability.evolved) { for (let k = projBefore; k < state.projectiles.length; k++) { const pr = state.projectiles[k]; pr.evolved = true; pr.radius *= 1.3; pr.color = ability.color; } for (let k = poolsBefore; k < state.nebulaPools.length; k++) (state.nebulaPools[k] as any).evo = true; }
   }
 }
 
@@ -717,7 +723,7 @@ export function updateGame(state: GameState, dt: number): void {
   
   if (state.gameMode === 'boss_rush') {
     // Modalità Boss Rush: spawn solo boss in sequenza
-    if (!state.bossActive && state.bossRushIndex < bossTypes.length) {
+    if (!state.bossActive && !state.enemies.some(e => e.isBoss) && state.bossRushIndex < bossTypes.length) {
       const selectedBoss = bossTypes[state.bossRushIndex];
       state.enemies.push(spawnEnemy(state, selectedBoss));
       state.bossActive = true;
@@ -730,7 +736,8 @@ export function updateGame(state: GameState, dt: number): void {
     // Un boss ogni 5 ondate, in ordine. Se il boss precedente e' ancora vivo il successivo arriva appena
     // viene sconfitto (prima veniva saltato: ad esempio il boss finale dell'ondata 40 poteva non comparire mai).
     if (state.nextBossWave === undefined) state.nextBossWave = 5;
-    if (state.wave >= state.nextBossWave && !state.bossActive) {
+    // mai due boss insieme (un boss e un mini boss si')
+    if (state.wave >= state.nextBossWave && !state.bossActive && !state.enemies.some(e => e.isBoss)) {
       let bossIndex = state.bossSpawnCount || 0;
       state.bossSpawnCount = bossIndex + 1;
       state.nextBossWave = Math.max(state.nextBossWave + 5, state.wave + 1);
@@ -756,7 +763,7 @@ export function updateGame(state: GameState, dt: number): void {
     const curseSpawn = 1 + Math.max(0, state.player.curseLevel) / 100;
     // Durante un boss arrivano il 70% di nemici in meno: lo scontro col boss resta al centro della scena
     // piu' si va avanti di ondata piu' nemici arrivano (prima il ritmo si fermava a 8 al secondo dopo 2 minuti)
-    const spawnRate = Math.min(1 + state.time / 20, 8) * (1 + Math.max(0, state.wave - 1) * 0.045) * curseSpawn * (state.bossActive ? 0.3 : 1);
+    const spawnRate = Math.min(1 + state.time / 20, 8) * (1 + Math.max(0, state.wave - 1) * 0.045) * (1 + postBossStep(state) * 0.2) * curseSpawn * (state.bossActive ? 0.3 : 1);
     if (Math.random() < spawnRate * gameDt) {
       const wave1: EnemyType[] = ['asteroid_small', 'swarm', 'drone_sentinel', 'cosmic_leech', 'star_beetle'];
       const wave2: EnemyType[] = ['asteroid_small', 'asteroid_medium', 'drone_sentinel', 'star_raider', 'void_crawler', 'star_fish'];
@@ -1014,7 +1021,8 @@ export function updateGame(state: GameState, dt: number): void {
         clearBossHazards(state, e.id, true);
         state.coinsEarned += 20 + state.wave * 2; state.diamondsEarned += 1;
         for (let i = 0; i < 4; i++) spawnExpOrb(state, { x: e.pos.x + (Math.random() - 0.5) * 80, y: e.pos.y + (Math.random() - 0.5) * 80 }, 6 + Math.floor(state.wave / 2));
-        spawnPickup(state, e.pos, Math.random() < 0.5 ? 'heart' : 'magnet');
+        spawnPickup(state, e.pos, 'chest'); // anche i mini boss lasciano uno scrigno (evoluzioni)
+        spawnPickup(state, { x: e.pos.x + 50, y: e.pos.y }, Math.random() < 0.5 ? 'heart' : 'magnet');
         state.screenShake = Math.max(state.screenShake, 0.4); spawnParticles(state, e.pos, e.color, 16);
       }
       else if (e.type === 'guardian' && Math.random() < 0.3) state.diamondsEarned += 1;
@@ -1074,8 +1082,10 @@ export function updateGame(state: GameState, dt: number): void {
   if (state.enemies.length > 150) {
     const bosses = state.enemies.filter(e => e.isBoss || e.isMini); // i mini boss non vengono mai tolti dal limite
     const normalEnemies = state.enemies.filter(e => !e.isBoss && !e.isMini);
-    if (normalEnemies.length > 190) {
-      normalEnemies.splice(0, normalEnemies.length - 140);
+    // dopo il 4o boss il tetto sale un po' a ogni boss (piu' mostri), restando leggero per i telefoni
+    const cap = Math.min(260, 190 + postBossStep(state) * 14);
+    if (normalEnemies.length > cap) {
+      normalEnemies.splice(0, normalEnemies.length - (cap - 50));
     }
     state.enemies = [...bosses, ...normalEnemies];
   }
@@ -1111,19 +1121,28 @@ function generateLevelUpChoices(state: GameState): LevelUpChoice[] {
       { type: 'stat', stat: 'damage', name: 'gold_reward', description: 'gold_reward_desc', icon: '💰', color: '#ffd700' }
     ];
   }
+  // Fino a 3 scelte vere: armi/passive nuove e potenziamenti. L'oro compare solo se non resta altro.
+  // (prima: al massimo 2 potenziamenti e 2 nuove abilita' filtrate a caso, quindi spesso usciva l'oro anche con tanto da prendere)
   const pool: LevelUpChoice[] = [];
   const ownedTypes = ownedAbilities.map(a => a.type);
+  const shuffle = <T,>(arr: T[]) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+  let fresh: AbilityType[] = [];
   if (canOfferActive || canOfferPassive) {
-    let available: AbilityType[] = [];
-    if (canOfferActive && !canOfferPassive) available = activeTypes.filter(t => !ownedTypes.includes(t));
-    else if (!canOfferActive && canOfferPassive) available = passiveTypes.filter(t => !ownedTypes.includes(t));
-    else available = [...activeTypes, ...passiveTypes].filter(t => !ownedTypes.includes(t));
-    const filtered = available.filter(type => { const info = getAbilityInfo(type); const rarity = (type === 'passive_quantum_reactor' && ownedTypes.includes('passive_pulsar_heart')) ? 100 : info.rarity; return Math.random() * 100 < rarity + state.player.rarityBonus + state.player.luckBonus * 10; });
-    const shuffled = [...filtered].sort(() => Math.random() - 0.5);
-    for (const type of shuffled.slice(0, 2)) { const info = getAbilityInfo(type); pool.push({ type: 'ability', abilityType: type, name: info.name, description: info.description, icon: '🆕', color: info.color }); }
+    const available = [...(canOfferActive ? activeTypes : []), ...(canOfferPassive ? passiveTypes : [])].filter(t => !ownedTypes.includes(t));
+    // la rarita' decide l'ordine (le rare escono meno spesso), ma non elimina piu' le scelte
+    const luck = state.player.rarityBonus + state.player.luckBonus * 10;
+    fresh = available.map(type => { const info = getAbilityInfo(type); const rarity = (type === 'passive_quantum_reactor' && ownedTypes.includes('passive_pulsar_heart')) ? 100 : info.rarity; return { type, k: Math.random() * (rarity + luck) }; }).sort((x, y) => y.k - x.k).map(x => x.type);
   }
-  if (canOfferUpgrades) { const upgradable = ownedAbilities.filter(a => a.level < a.maxLevel); const shuffled = [...upgradable].sort(() => Math.random() - 0.5); for (const ability of shuffled.slice(0, 2)) { const info = getAbilityInfo(ability.type); pool.push({ type: 'upgrade', abilityType: ability.type, name: info.name, description: info.description, icon: '⬆️', color: ability.color }); } }
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const upgradable = shuffle(ownedAbilities.filter(a => a.level < a.maxLevel));
+  const newPick = (t: AbilityType): LevelUpChoice => { const info = getAbilityInfo(t); return { type: 'ability', abilityType: t, name: info.name, description: info.description, icon: '🆕', color: info.color }; };
+  const upPick = (ab: Ability): LevelUpChoice => { const info = getAbilityInfo(ab.type); return { type: 'upgrade', abilityType: ab.type, name: info.name, description: info.description, icon: '⬆️', color: ab.color }; };
+  // mescola: di solito 1-2 novita' e il resto potenziamenti, poi riempie con quello che resta
+  const wantNew = fresh.length ? (upgradable.length ? 1 + (Math.random() < 0.5 ? 1 : 0) : 3) : 0;
+  let fi = 0, ui = 0;
+  while (pool.length < 3 && fi < fresh.length && fi < wantNew) pool.push(newPick(fresh[fi++]));
+  while (pool.length < 3 && ui < upgradable.length) pool.push(upPick(upgradable[ui++]));
+  while (pool.length < 3 && fi < fresh.length) pool.push(newPick(fresh[fi++]));
+  shuffle(pool);
   while (pool.length < 3) pool.push({ type: 'stat', stat: 'damage', name: 'gold_reward', description: 'gold_reward_desc', icon: '💰', color: '#ffd700' });
   return pool.slice(0, 3);
 }
@@ -1388,6 +1407,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   const orbitingSatellitesAbility = player.abilities.find(a => a.type === 'orbiting_satellites');
   if (orbitingSatellitesAbility) { const satLvl = orbitingSatellitesAbility.level; const satCount = getSatelliteCount(player, satLvl); const rotationSpeed = 2 * (1 + player.projectileSpeedBonus); const satDistance = Math.min((70 + satLvl * 10) * (1 + player.areaBonus), 200); const satRadius = 15 * (1 + player.areaBonus); for (let i = 0; i < satCount; i++) { const ang = (state.time * rotationSpeed) + (i * Math.PI * 2 / satCount); const satX = player.pos.x + Math.cos(ang) * satDistance; const satY = player.pos.y + Math.sin(ang) * satDistance; ctx.save(); ctx.translate(satX, satY); ctx.rotate(ang + Math.PI / 2); ctx.fillStyle = orbitingSatellitesAbility.color; ctx.beginPath(); ctx.arc(0, 0, satRadius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, satRadius * 0.4, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } }
   drawProbes(ctx, state);
+  drawEvolvedOverlays(ctx, state);
   const gravityFieldAbility = player.abilities.find(a => a.type === 'gravity_field');
   if (gravityFieldAbility) { const fieldLvl = gravityFieldAbility.level; const fieldRadius = (150 + fieldLvl * 20) * (1 + player.areaBonus); const pulse = Math.sin(state.time * 3) * 0.1 + 0.9; ctx.save(); ctx.globalAlpha = 0.25 * pulse; const gradient = ctx.createRadialGradient(player.pos.x, player.pos.y, 0, player.pos.x, player.pos.y, fieldRadius); gradient.addColorStop(0, gravityFieldAbility.color + '00'); gradient.addColorStop(0.5, gravityFieldAbility.color + '33'); gradient.addColorStop(0.8, gravityFieldAbility.color + '66'); gradient.addColorStop(1, gravityFieldAbility.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 0.5 * pulse; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 2; ctx.setLineDash([5, 10]); ctx.lineDashOffset = -state.time * 20; ctx.beginPath(); ctx.arc(player.pos.x, player.pos.y, fieldRadius * 0.9, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 0.3; for (let i = 0; i < 6; i++) { const ang = (i / 6) * Math.PI * 2 + state.time * 0.5; const innerRadius = fieldRadius * 0.3; const outerRadius = fieldRadius * 0.85; const x1 = player.pos.x + Math.cos(ang) * innerRadius; const y1 = player.pos.y + Math.sin(ang) * innerRadius; const x2 = player.pos.x + Math.cos(ang) * outerRadius; const y2 = player.pos.y + Math.sin(ang) * outerRadius; ctx.strokeStyle = gravityFieldAbility.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); } ctx.restore(); }
   drawBossHazards(ctx, state, 'top');
@@ -1918,6 +1938,7 @@ export { genId as newId, spawnParticles, shieldPulse, spawnDamageNumber };
 
 /** Proiettili con un aspetto dedicato (Lancia del Vuoto, fiamme, prisma, fendenti). Ritorna true se disegnato. */
 function drawWeaponProjectile(ctx: CanvasRenderingContext2D, proj: Projectile, state: GameState): boolean {
+  if (drawEvolvedProjectile(ctx, proj, state.time)) return true;
   const t = proj.type;
   if (t !== 'void_lance' && t !== 'flame_puff' && t !== 'prism_ray' && t !== 'prism_shard' && t !== 'arc_slash') return false;
   const rot = Math.atan2(proj.vel.y, proj.vel.x);
@@ -1987,4 +2008,10 @@ function drawSpecialPool(ctx: CanvasRenderingContext2D, pool: NebulaPool, state:
     ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#12001f'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.62, w * 0.45, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
+}
+
+
+/** Quanti boss sono stati sconfitti oltre il terzo: da li' in poi ogni boss rende le ondate piu' dure. */
+function postBossStep(state: GameState): number {
+  return state.gameMode === 'boss_rush' ? 0 : Math.max(0, (state.bossesDefeated || 0) - 3);
 }

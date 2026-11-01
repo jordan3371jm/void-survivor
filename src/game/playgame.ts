@@ -213,6 +213,31 @@ class PlaygamaSDK {
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
+  // Acquisti con soldi veri (Bridge payments): solo dove la piattaforma li supporta
+  paymentsSupported(): boolean {
+    return this.isInitialized() && !isKlyo && !!this.bridge?.payments?.isSupported;
+  }
+  async getCatalog(): Promise<Record<string, string>> {
+    if (!this.paymentsSupported()) return {};
+    try {
+      const items: any[] = await this.bridge.payments.getCatalog();
+      const out: Record<string, string> = {};
+      for (const it of items || []) if (it?.id) out[it.id] = String(it.price ?? (it.priceValue != null ? `${it.priceValue} ${it.priceCurrencyCode || ''}` : ''));
+      return out;
+    } catch (e) { console.warn('[Playgama] catalogo', e); return {}; }
+  }
+  async getPurchases(): Promise<string[]> {
+    if (!this.paymentsSupported()) return [];
+    try { const list: any[] = await this.bridge.payments.getPurchases(); return (list || []).map(p => p?.id || p?.productId).filter(Boolean); }
+    catch (e) { console.warn('[Playgama] acquisti', e); return []; }
+  }
+  /** Avvia l'acquisto: true solo se il pagamento e' andato a buon fine. */
+  async purchase(id: string): Promise<boolean> {
+    if (!this.paymentsSupported()) return false;
+    try { const r = await this.bridge.payments.purchase(id); return !!r; }
+    catch (e) { console.warn('[Playgama] acquisto annullato', e); return false; }
+  }
+
   // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:
   // - computer con finestra larga, menu e partita: due banner stretti ai lati della scena
   // - tutto il resto (telefoni, tablet, finestre piccole, altre schermate): una striscia in basso,

@@ -207,5 +207,31 @@
       "id": "void-survivor.scores",
       "isMain": true
     }
+  ],
+  "payments": [
+    {
+      "id": "ship_boomerang"
+    },
+    {
+      "id": "ship_viper"
+    },
+    {
+      "id": "ship_laser"
+    },
+    {
+      "id": "ship_quantum"
+    },
+    {
+      "id": "ship_kinetic"
+    },
+    {
+      "id": "ship_tie_fighter"
+    },
+    {
+      "id": "ship_void"
+    },
+    {
+      "id": "ship_federation"
+    }
   ]
 }

@@ -15,7 +15,7 @@ import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
-import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
@@ -27,7 +27,7 @@ const DailyEventsModal = React.lazy(() => import('./DailyEventsModal').then((mod
 const ASSET_BASE_URL: string = import.meta.env.BASE_URL || '/';
 const BOSS_ICON_LIST = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
 
-type Screen = 'home' | 'upgrades' | 'ships' | 'settings' | 'playing';
+type Screen = 'home' | 'upgrades' | 'ships' | 'settings' | 'playing' | 'shop';
 type GameMode = 'normal' | 'endless' | 'boss_rush';
 
 interface FinalStats {
@@ -37,7 +37,8 @@ interface FinalStats {
 
 // Dalla nave piu' debole alla piu' forte (in base all'arma di partenza), prezzo crescente.
 // La nave Buco Nero e' stata tolta (store.ts rimborsa chi l'aveva comprata).
-const SHIPS = [
+// iap: astronavi in vendita con soldi veri (Playgama payments). Dove i pagamenti non ci sono restano acquistabili con le monete.
+const SHIPS: { type: string; nameKey: string; price: number; color: string; ability: string; iap?: string }[] = [
   { type: 'starter', nameKey: 'ship_starter', price: 0, color: '#62f5cf', ability: 'homing_laser' },
   { type: 'shield_ship', nameKey: 'ship_shield', price: 150, color: '#3dffaa', ability: 'energy_shield' },
   { type: 'cryo_ship', nameKey: 'ship_cryo', price: 250, color: '#4ff0ff', ability: 'cryo_lance' },
@@ -50,19 +51,19 @@ const SHIPS = [
   { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 1300, color: '#ff4444', ability: 'probe_x' },
   { type: 'probe_y_ship', nameKey: 'ship_probe_y', price: 1500, color: '#4f6bff', ability: 'probe_y' },
   { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1750, color: '#d19a66', ability: 'asteroid_fragment' },
-  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 2000, color: '#5cffff', ability: 'quantum_bounce' },
-  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2300, color: '#aab4ff', ability: 'neutronium_boomerang' },
-  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2600, color: '#ff9a2e', ability: 'kinetic_darts' },
+  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 2000, color: '#5cffff', ability: 'quantum_bounce', iap: 'ship_quantum' },
+  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2300, color: '#aab4ff', ability: 'neutronium_boomerang', iap: 'ship_boomerang' },
+  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2600, color: '#ff9a2e', ability: 'kinetic_darts', iap: 'ship_kinetic' },
   { type: 'electric_ship', nameKey: 'ship_electric', price: 3000, color: '#7cc4ff', ability: 'ion_storm' },
   { type: 'meteor_ship', nameKey: 'ship_meteor', price: 3400, color: '#ff7a33', ability: 'meteor' },
   { type: 'fire_ship', nameKey: 'ship_fire', price: 3900, color: '#ff6a2b', ability: 'plasma_flamethrower' },
-  { type: 'viper_ship', nameKey: 'ship_viper', price: 4400, color: '#c0c8d8', ability: 'prism_ray' },
-  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 5000, color: '#a3acc2', ability: 'arc_slash' },
+  { type: 'viper_ship', nameKey: 'ship_viper', price: 4400, color: '#c0c8d8', ability: 'prism_ray', iap: 'ship_viper' },
+  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 5000, color: '#a3acc2', ability: 'arc_slash', iap: 'ship_tie_fighter' },
   { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 5700, color: '#5cff8a', ability: 'antimatter_bomb' },
   { type: 'shadow_ship', nameKey: 'ship_shadow', price: 6500, color: '#9f8cff', ability: 'gravity_field' },
-  { type: 'federation_ship', nameKey: 'ship_federation', price: 7400, color: '#e6ecf5', ability: 'void_lance' },
-  { type: 'laser_ship', nameKey: 'ship_laser', price: 8500, color: '#ff4d5e', ability: 'laser_swords' },
-  { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole' },
+  { type: 'federation_ship', nameKey: 'ship_federation', price: 7400, color: '#e6ecf5', ability: 'void_lance', iap: 'ship_federation' },
+  { type: 'laser_ship', nameKey: 'ship_laser', price: 8500, color: '#ff4d5e', ability: 'laser_swords', iap: 'ship_laser' },
+  { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole', iap: 'ship_void' },
 ];
 
 const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
@@ -127,6 +128,9 @@ export default function App() {
   const lastModeRef = useRef<GameMode>('normal');
 
   const [screen, setScreen] = useState<Screen>('home');
+  // prezzi del negozio (dal catalogo della piattaforma); null = pagamenti non disponibili
+  const [iapPrices, setIapPrices] = useState<Record<string, string> | null>(null);
+  const [iapBusy, setIapBusy] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [levelUpPending, setLevelUpPending] = useState(false);
   const [levelUpChoices, setLevelUpChoices] = useState<LevelUpChoice[]>([]);
@@ -215,6 +219,16 @@ export default function App() {
           commitStore({ ...cur, settings: { ...cur.settings, language: pl as Language } });
         }
         playgama.sendGameReady();
+        // Negozio: prezzi dal catalogo e ripristino delle astronavi gia' comprate (checklist 2.4.5 / 2.4.6)
+        if (playgama.paymentsSupported()) {
+          playgama.getCatalog().then(c => setIapPrices(c)).catch(() => setIapPrices({}));
+          playgama.getPurchases().then(ids => {
+            const owned = SHIPS.filter(sh => sh.iap && ids.includes(sh.iap));
+            const cur = storeRef.current;
+            const missing = owned.filter(sh => !(cur.ships as any)[sh.type]);
+            if (missing.length) commitStore({ ...cur, ships: { ...cur.ships, ...Object.fromEntries(missing.map(sh => [sh.type, true])) } });
+          }).catch(() => {});
+        }
       }
     }).catch((error: any) => {
       console.error('[App] Playgama SDK non disponibile:', error);
@@ -991,6 +1005,7 @@ export default function App() {
     const boostActive = store.settings.speedMultiplier === 2 && store.settings.speedBoostTimer > 0 && !store.settings.speedBoostPaused;
     const boostPaused = store.settings.speedBoostPaused && store.settings.speedBoostTimer > 0;
     const dock = [
+      ...(iapPrices ? [{ key: 'shop', label: clean(t(lang, 'shop')), icon: <ShoppingBag size={20} />, onClick: () => goTo('shop'), tone: 'violet' as const }] : []),
       { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold', badge: dailyReady ? 1 : 0 },
       { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green', badge: missionsClaimable },
       { key: 'achievements', label: clean(t(lang, 'achievements')), icon: <Target size={20} />, onClick: () => setShowAchievementsModal(true), tone: 'orange', badge: unclaimedAchievements },
@@ -1194,7 +1209,7 @@ export default function App() {
                 {coinUpgrades.map(u => {
                   const value = u.type === 'maxHp' ? (store.stats.maxHp || 100) : (store.stats[u.type] || 0);
                   const level = u.type === 'maxHp' ? (store.upgrades.maxHp?.level || 0) : getStatLevel(u.type as CoinUpgradeType, value);
-                  const maxLevel = u.type === 'maxHp' ? (store.upgrades.maxHp?.maxLevel || 200) : getStatMaxLevel(u.type as CoinUpgradeType);
+                  const maxLevel = u.type === 'maxHp' ? (store.upgrades.maxHp?.maxLevel || 500) : getStatMaxLevel(u.type as CoinUpgradeType);
                   const cost = u.type === 'maxHp' ? getUpgradeCost(level) : getCoinUpgradeCost(u.type as CoinUpgradeType, level);
                   return <React.Fragment key={u.type}>{renderStatCard(u, value, level, maxLevel, cost, 'coin', () => {
                     const ns = u.type === 'maxHp' ? applyUpgrade(storeRef.current, 'maxHp') : applyCoinUpgrade(storeRef.current, u.type as CoinUpgradeType);
@@ -1230,8 +1245,8 @@ export default function App() {
                     <AbilityIcon type={type} color={info.color} size={56} />
                     <h3 className="vs-card-title">{t(lang, info.name)}</h3>
                     {EVOLUTIONS[type] && (
-                      <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + questa passiva + scrigno di un boss', 'Max level + this passive + boss chest', 'Nivel máximo + esta pasiva + cofre de jefe', 'Niveau max + ce passif + coffre de boss', '满级+此被动+Boss宝箱')}>
-                        <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))} → <b>{getEvolutionName(type, lang)}</b>
+                      <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + scrigno di un boss o mini boss', 'Max level + a chest from a boss or mini boss', 'Nivel máximo + cofre de jefe o minijefe', 'Niveau max + coffre de boss ou mini-boss', '满级+Boss或小Boss宝箱')}>
+                        <Sparkles size={13} />{L(lang, 'Livello max', 'Max level', 'Nivel máx.', 'Niveau max', '满级')} → <b>{getEvolutionName(type, lang)}</b>
                       </span>
                     )}
                   </div>
@@ -1269,54 +1284,86 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // ASTRONAVI
   // ---------------------------------------------------------------------------
+  // Scheda di un'astronave (usata dall'hangar e dal negozio)
+  const renderShipCard = (ship: typeof SHIPS[number]) => {
+    const owned = !!store.ships[ship.type as keyof typeof store.ships];
+    const selected = store.currentShip === ship.type;
+    const abilityInfo = getAbilityInfo(ship.ability as AbilityType);
+    const canAfford = store.coins >= ship.price;
+    return (
+      <article key={ship.type} className={`vs-card vs-ship-card${selected ? ' is-selected' : ''}${owned ? '' : ' is-locked'}`} style={{ ['--accent' as any]: ship.color }}>
+        {selected && <span className="vs-ship-flag"><Check size={13} />{clean(t(lang, 'selected'))}</span>}
+        <div className="vs-ship-art">
+          <ShipIcon shipType={ship.type} color={ship.color} size={160} className="vs-ship-img" />
+        </div>
+        <h3 className="vs-ship-name">{t(lang, ship.nameKey)}</h3>
+        <div className="vs-ship-ability" style={{ ['--accent' as any]: abilityInfo.color }}>
+          <AbilityIcon type={ship.ability} color={abilityInfo.color} size={22} />
+          <span>{t(lang, abilityInfo.name)}</span>
+        </div>
+        {!owned && ship.iap && iapPrices ? (
+          <button
+            type="button"
+            className="vs-btn vs-btn--sm vs-btn--block vs-btn--primary"
+            disabled={iapBusy}
+            onClick={async () => {
+              setIapBusy(true);
+              const ok = await playgama.purchase(ship.iap!);
+              setIapBusy(false);
+              // l'astronave si sblocca solo a pagamento riuscito (checklist 2.4.3)
+              if (ok) { const current = storeRef.current; commitStore({ ...current, ships: { ...current.ships, [ship.type]: true } }); }
+            }}
+          >
+            <ShoppingBag size={15} />{iapPrices[ship.iap] || '…'} · {clean(t(lang, 'buy_ship'))}
+          </button>
+        ) : !owned ? (
+          <button
+            type="button"
+            className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--gold' : 'vs-btn--muted'}`}
+            disabled={!canAfford}
+            onClick={() => {
+              const current = storeRef.current;
+              if (current.coins < ship.price) return;
+              commitStore({ ...current, coins: current.coins - ship.price, ships: { ...current.ships, [ship.type]: true } });
+            }}
+          >
+            <Coins size={15} />{ship.price.toLocaleString()} · {clean(t(lang, 'buy_ship'))}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`vs-btn vs-btn--sm vs-btn--block ${selected ? 'vs-btn--done' : 'vs-btn--accent'}`}
+            disabled={selected}
+            onClick={() => { const current = storeRef.current; commitStore({ ...current, currentShip: ship.type as any }); }}
+          >
+            {selected ? <><Check size={15} />{clean(t(lang, 'selected'))}</> : clean(t(lang, 'select'))}
+          </button>
+        )}
+      </article>
+    );
+  };
+
+  if (screen === 'shop') {
+    return (
+      <div className="vs-screen">
+        <TopBar title={clean(t(lang, 'shop'))} icon={<ShoppingBag size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
+        <main className="vs-content vs-content--wide">
+          <p className="vs-shop-note">{L(lang, 'Astronavi speciali con le armi più forti. Restano tue per sempre.', 'Special ships with the strongest weapons. Yours to keep forever.', 'Naves especiales con las armas más fuertes. Son tuyas para siempre.', 'Vaisseaux spéciaux avec les armes les plus puissantes. À toi pour toujours.', '拥有最强武器的特殊飞船，永久拥有。')}</p>
+          <div className="vs-grid vs-grid--ships">
+            {SHIPS.filter(sh => sh.iap).map(renderShipCard)}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   if (screen === 'ships') {
     return (
       <div className="vs-screen">
         <TopBar title={t(lang, 'astronavi')} icon={<Rocket size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
         <main className="vs-content vs-content--wide">
           <div className="vs-grid vs-grid--ships">
-            {SHIPS.map(ship => {
-              const owned = !!store.ships[ship.type as keyof typeof store.ships];
-              const selected = store.currentShip === ship.type;
-              const abilityInfo = getAbilityInfo(ship.ability as AbilityType);
-              const canAfford = store.coins >= ship.price;
-              return (
-                <article key={ship.type} className={`vs-card vs-ship-card${selected ? ' is-selected' : ''}${owned ? '' : ' is-locked'}`} style={{ ['--accent' as any]: ship.color }}>
-                  {selected && <span className="vs-ship-flag"><Check size={13} />{clean(t(lang, 'selected'))}</span>}
-                  <div className="vs-ship-art">
-                    <ShipIcon shipType={ship.type} color={ship.color} size={160} className="vs-ship-img" />
-                  </div>
-                  <h3 className="vs-ship-name">{t(lang, ship.nameKey)}</h3>
-                  <div className="vs-ship-ability" style={{ ['--accent' as any]: abilityInfo.color }}>
-                    <AbilityIcon type={ship.ability} color={abilityInfo.color} size={22} />
-                    <span>{t(lang, abilityInfo.name)}</span>
-                  </div>
-                  {!owned ? (
-                    <button
-                      type="button"
-                      className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--gold' : 'vs-btn--muted'}`}
-                      disabled={!canAfford}
-                      onClick={() => {
-                        const current = storeRef.current;
-                        if (current.coins < ship.price) return;
-                        commitStore({ ...current, coins: current.coins - ship.price, ships: { ...current.ships, [ship.type]: true } });
-                      }}
-                    >
-                      <Coins size={15} />{ship.price.toLocaleString()} · {clean(t(lang, 'buy_ship'))}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`vs-btn vs-btn--sm vs-btn--block ${selected ? 'vs-btn--done' : 'vs-btn--accent'}`}
-                      disabled={selected}
-                      onClick={() => { const current = storeRef.current; commitStore({ ...current, currentShip: ship.type as any }); }}
-                    >
-                      {selected ? <><Check size={15} />{clean(t(lang, 'selected'))}</> : clean(t(lang, 'select'))}
-                    </button>
-                  )}
-                </article>
-              );
-            })}
+            {SHIPS.map(renderShipCard)}
           </div>
         </main>
       </div>
@@ -1468,8 +1515,8 @@ export default function App() {
                         <span className="vs-choice-desc">{isGold ? '+100 ' + t(lang, 'coins') : t(lang, choice.description)}</span>
                         {choice.abilityType && EVOLUTIONS[choice.abilityType] && (choice.type === 'ability' || (owned && curLvl + 1 >= maxLvl)) && (
                           <span className="vs-choice-evo">
-                            <AbilityIcon type={EVOLUTIONS[choice.abilityType]!} color="#fbbf24" size={18} />
-                            {L(lang, 'Evolve con', 'Evolves with', 'Evoluciona con', 'Évolue avec', '进化需要')} {clean(t(lang, getAbilityInfo(EVOLUTIONS[choice.abilityType]!).name))} → {getEvolutionName(choice.abilityType, lang)}
+                            <Sparkles size={14} />
+                            {L(lang, 'Al livello massimo si evolve in', 'At max level it evolves into', 'Al nivel máximo evoluciona en', 'Au niveau max, évolue en', '满级后进化为')} {getEvolutionName(choice.abilityType, lang)}
                           </span>
                         )}
                       </span>

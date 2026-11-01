@@ -536,7 +536,8 @@ svg { flex-shrink: 0; }
 
 .vs-dock {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  grid-auto-flow: column;
   gap: 6px;
   width: 100%;
   max-width: 720px;
@@ -1294,3 +1295,4 @@ svg { flex-shrink: 0; }
 /* Banner Playgama in basso (telefoni, tablet, finestre piccole): schermate e finestre finiscono sopra la striscia */
 .vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { bottom: var(--ad-bottom, 0px); }
 .vs-toast { bottom: calc(24px + var(--safe-b) + var(--ad-bottom, 0px)); }
+.vs-shop-note { margin: 0 0 14px; text-align: center; color: var(--muted, #9aa3c7); font-size: 0.9rem; }

@@ -40,7 +40,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
     {
       icon: <Gift size={40} />, color: '#fbbf24',
       title: L(lang, 'Scrigni ed evoluzioni', 'Chests and evolutions', 'Cofres y evoluciones', 'Coffres et évolutions', '宝箱与进化'),
-      text: L(lang, 'Ogni boss lascia uno scrigno. Un’arma al livello massimo + la sua passiva abbinata si evolve in un’arma leggendaria, come i Siluri Fotonici o i Siluri Protonici!', 'Every boss drops a chest. A max-level weapon + its matching passive evolves into a legendary weapon, like Photon or Proton Torpedoes!', 'Cada jefe suelta un cofre. Un arma a nivel máximo + su pasiva evoluciona en un arma legendaria, ¡como los Torpedos de Fotones o de Protones!', 'Chaque boss lâche un coffre. Une arme au niveau max + son passif associé évolue en arme légendaire, comme les Torpilles à Photons ou à Protons !', '每个Boss都会掉落宝箱。满级武器+对应被动将进化为传奇武器，例如光子鱼雷或质子鱼雷！'),
+      text: L(lang, 'Boss e mini boss lasciano uno scrigno. Un’arma al livello massimo, aprendo lo scrigno, si evolve in un’arma leggendaria, come i Siluri Fotonici o i Siluri Protonici!', 'Bosses and mini bosses drop a chest. Open it with a max-level weapon and it evolves into a legendary weapon, like Photon or Proton Torpedoes!', 'Jefes y minijefes sueltan un cofre. Al abrirlo, un arma a nivel máximo evoluciona en un arma legendaria, ¡como los Torpedos de Fotones o de Protones!', 'Boss et mini-boss lâchent un coffre. En l’ouvrant, une arme au niveau max évolue en arme légendaire, comme les Torpilles à Photons ou à Protons !', 'Boss和小Boss会掉落宝箱。打开宝箱时，满级武器将进化为传奇武器，例如光子鱼雷或质子鱼雷！'),
     },
     {
       icon: <ShoppingCart size={40} />, color: '#38bdf8',
