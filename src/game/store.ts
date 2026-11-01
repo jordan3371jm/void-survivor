@@ -238,10 +238,11 @@ export type DiamondUpgradeType = 'luck' | 'expBonus';
 export type UpgradeType = CoinUpgradeType | DiamondUpgradeType;
 
 export function getCoinUpgradeCost(stat: CoinUpgradeType, currentLevel: number): number {
-  // DEF, critico, danno critico e rigenerazione sono i potenziamenti piu' forti: costano tutti come DEF
-  // (200 monete, +25% del prezzo iniziale a ogni livello). La velocita' resta piu' economica.
-  if (stat !== 'shipSpeed') return Math.round(200 * (1 + 0.25 * currentLevel));
-  return linearCost(100, currentLevel);
+  // DEF ha 100 livelli, gli altri 1000: un livello di DEF costa quanto 10 livelli di probabilita' di critico,
+  // cosi' completare DEF costa come completare il critico (~9,1 milioni di monete in tutto)
+  if (stat === 'defense') return 2010 + 1800 * currentLevel;
+  const baseCosts: Record<CoinUpgradeType, number> = { defense: 0, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
+  return linearCost(baseCosts[stat], currentLevel);
 }
 
 export function getDiamondUpgradeCost(stat: DiamondUpgradeType, currentLevel: number): number {
