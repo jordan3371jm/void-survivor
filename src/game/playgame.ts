@@ -231,6 +231,11 @@ class PlaygamaSDK {
     try { const list: any[] = await this.bridge.payments.getPurchases(); return (list || []).map(p => p?.id || p?.productId).filter(Boolean); }
     catch (e) { console.warn('[Playgama] acquisti', e); return []; }
   }
+  /** Segna come usato un acquisto consumabile (monete, diamanti) dopo averlo consegnato. */
+  async consumePurchase(id: string): Promise<void> {
+    if (!this.paymentsSupported()) return;
+    try { await this.bridge.payments.consumePurchase(id); } catch (e) { console.warn('[Playgama] consumo', e); }
+  }
   /** Avvia l'acquisto: true solo se il pagamento e' andato a buon fine. */
   async purchase(id: string): Promise<boolean> {
     if (!this.paymentsSupported()) return false;

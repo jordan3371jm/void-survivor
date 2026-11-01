@@ -238,6 +238,39 @@
     },
     {
       "id": "ship_federation"
+    },
+    {
+      "id": "coins_small"
+    },
+    {
+      "id": "coins_medium"
+    },
+    {
+      "id": "coins_large"
+    },
+    {
+      "id": "coins_huge"
+    },
+    {
+      "id": "diamonds_small"
+    },
+    {
+      "id": "diamonds_medium"
+    },
+    {
+      "id": "diamonds_large"
+    },
+    {
+      "id": "diamonds_huge"
+    },
+    {
+      "id": "starter_pack"
+    },
+    {
+      "id": "mega_pack"
+    },
+    {
+      "id": "speed_x2"
     }
   ]
 }

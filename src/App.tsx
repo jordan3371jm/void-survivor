@@ -67,6 +67,37 @@ const SHIPS: { type: string; nameKey: string; price: number; color: string; abil
 ];
 
 // Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
+// Pacchetti a pagamento del negozio (Playgama payments). consumable: si possono ricomprare.
+type Pack = { id: string; coins: number; diamonds: number; consumable: boolean; ship?: string; speed?: boolean };
+const PACKS: Pack[] = [
+  { id: 'coins_small', coins: 50000, diamonds: 0, consumable: true },
+  { id: 'coins_medium', coins: 300000, diamonds: 0, consumable: true },
+  { id: 'coins_large', coins: 1500000, diamonds: 0, consumable: true },
+  { id: 'coins_huge', coins: 5000000, diamonds: 0, consumable: true },
+  { id: 'diamonds_small', coins: 0, diamonds: 50, consumable: true },
+  { id: 'diamonds_medium', coins: 0, diamonds: 250, consumable: true },
+  { id: 'diamonds_large', coins: 0, diamonds: 600, consumable: true },
+  { id: 'diamonds_huge', coins: 0, diamonds: 1500, consumable: true },
+  { id: 'starter_pack', coins: 100000, diamonds: 100, consumable: false, ship: 'void_ship' },
+  { id: 'mega_pack', coins: 1000000, diamonds: 1000, consumable: true },
+  { id: 'speed_x2', coins: 0, diamonds: 0, consumable: false, speed: true },
+];
+/** Consegna il contenuto di un pacchetto. I pacchetti permanenti si consegnano una sola volta. */
+function grantPack(cur: GameStore, pack: Pack): GameStore {
+  const granted = cur.iapGranted || [];
+  if (!pack.consumable && granted.includes(pack.id)) {
+    // gia' consegnato: ripristina solo cio' che e' permanente (nave, x2)
+    return { ...cur, ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships, speedX2Owned: cur.speedX2Owned || !!pack.speed };
+  }
+  return {
+    ...cur,
+    coins: cur.coins + pack.coins, diamonds: cur.diamonds + pack.diamonds,
+    ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships,
+    speedX2Owned: cur.speedX2Owned || !!pack.speed,
+    iapGranted: pack.consumable ? granted : [...granted, pack.id],
+  };
+}
+
 // Premi del negozio guardando una pubblicita' con premio (senza limite)
 const AD_REWARDS = [{ id: 'shop_coins', coins: 500, diamonds: 0 }, { id: 'shop_diamonds', coins: 0, diamonds: 5 }];
 // 300 monete per diamante nel cambio piu' piccolo, fino a 500 nel piu' grande (1000 diamanti = 500.000 monete)
@@ -78,6 +109,23 @@ const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_platin
 /** Testi brevi non presenti nel file delle traduzioni. */
 function L(lang: Language, it: string, en: string, es: string, fr: string, zh: string): string {
   return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : lang === 'pl' ? plFromEn(en) : en;
+}
+
+function packTitle(lang: Language, id: string): string {
+  const T: Record<string, [string, string, string, string, string]> = {
+    coins_small: ['Monete piccolo', 'Small coins', 'Monedas pequeño', 'Petit lot de pièces', '小金币包'],
+    coins_medium: ['Monete medio', 'Medium coins', 'Monedas mediano', 'Lot moyen de pièces', '中金币包'],
+    coins_large: ['Monete grande', 'Large coins', 'Monedas grande', 'Grand lot de pièces', '大金币包'],
+    coins_huge: ['Monete gigante', 'Huge coins', 'Monedas gigante', 'Lot géant de pièces', '巨型金币包'],
+    diamonds_small: ['Diamanti piccolo', 'Small diamonds', 'Diamantes pequeño', 'Petit lot de diamants', '小钻石包'],
+    diamonds_medium: ['Diamanti medio', 'Medium diamonds', 'Diamantes mediano', 'Lot moyen de diamants', '中钻石包'],
+    diamonds_large: ['Diamanti grande', 'Large diamonds', 'Diamantes grande', 'Grand lot de diamants', '大钻石包'],
+    diamonds_huge: ['Diamanti enorme', 'Huge diamonds', 'Diamantes enorme', 'Lot énorme de diamants', '巨型钻石包'],
+    starter_pack: ['Pacchetto iniziale', 'Starter pack', 'Paquete inicial', 'Pack de départ', '新手礼包'],
+    mega_pack: ['Mega pacchetto', 'Mega pack', 'Mega paquete', 'Méga pack', '超级礼包'],
+    speed_x2: ['Velocità x2 per sempre', 'Permanent x2 speed', 'Velocidad x2 para siempre', 'Vitesse x2 pour toujours', '永久x2速度'],
+  };
+  const v = T[id]; return v ? L(lang, ...v) : id;
 }
 
 /** Rimuove emoji iniziali/finali dalle traduzioni (al loro posto usiamo icone coerenti). */
@@ -230,9 +278,14 @@ export default function App() {
           playgama.getCatalog().then(c => setIapPrices(c)).catch(() => setIapPrices({}));
           playgama.getPurchases().then(ids => {
             const owned = SHIPS.filter(sh => sh.iap && ids.includes(sh.iap));
-            const cur = storeRef.current;
+            let cur = storeRef.current;
             const missing = owned.filter(sh => !(cur.ships as any)[sh.type]);
-            if (missing.length) commitStore({ ...cur, ships: { ...cur.ships, ...Object.fromEntries(missing.map(sh => [sh.type, true])) } });
+            if (missing.length) cur = { ...cur, ships: { ...cur.ships, ...Object.fromEntries(missing.map(sh => [sh.type, true])) } };
+            // pacchetti: permanenti ripristinati, consumabili pagati ma non consegnati (gioco chiuso durante l'acquisto) consegnati e consumati
+            const packs = PACKS.filter(pk => ids.includes(pk.id));
+            for (const pk of packs) cur = grantPack(cur, pk);
+            if (missing.length || packs.length) commitStore(cur);
+            for (const pk of packs) if (pk.consumable) void playgama.consumePurchase(pk.id);
           }).catch(() => {});
         }
       }
@@ -342,7 +395,7 @@ export default function App() {
       const current = storeRef.current;
       const newTimer = Math.max(0, current.settings.speedBoostTimer - 1);
       let newStore: GameStore = newTimer <= 0
-        ? { ...current, settings: { ...current.settings, speedMultiplier: 1.0, speedBoostTimer: 0, speedBoostPaused: false } }
+        ? { ...current, settings: { ...current.settings, speedMultiplier: current.speedX2Owned ? 2.0 : 1.0, speedBoostTimer: 0, speedBoostPaused: false } }
         : { ...current, settings: { ...current.settings, speedBoostTimer: newTimer } };
       // Controlla gli obiettivi ogni 10 secondi
       if (newTimer % 10 === 0 && newStore.userProfile) {
@@ -1097,8 +1150,9 @@ export default function App() {
           const bosses = store.userProfile?.totalBossesDefeated || 0;
           const speedOptions = [
             { value: 1, label: clean(t(lang, 'speed_normal')), unlocked: true, note: '' },
-            { value: 1.5, label: clean(t(lang, 'speed_fast')), unlocked: bosses >= 1, note: t(lang, 'speed_requirement_boss1') },
-            { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: bosses >= 5, note: t(lang, 'speed_requirement_boss5') },
+            // x1.5: sconfiggendo il 4o boss. x2: con una pubblicita' (10 minuti) o comprato per sempre nel negozio
+            { value: 1.5, label: clean(t(lang, 'speed_fast')), unlocked: bosses >= 4, note: L(lang, 'Sconfiggi il quarto boss per sbloccare x1.5', 'Defeat the fourth boss to unlock x1.5', 'Derrota al cuarto jefe para desbloquear x1.5', 'Bats le quatrième boss pour débloquer x1.5', '击败第四个Boss解锁x1.5') },
+            { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: !!store.speedX2Owned || store.settings.speedBoostTimer > 0, note: t(lang, 'speed_requirement_ads') },
           ];
           return (
             <div className="vs-modal-backdrop" onClick={() => setShowSpeedModal(false)}>
@@ -1124,8 +1178,7 @@ export default function App() {
                       onClick={() => {
                         const current = storeRef.current;
                         if (o.value === 2) {
-                          const newTimer = Math.min((current.settings.speedBoostTimer || 0) + 600, 86400);
-                          commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostTimer: newTimer, speedBoostPaused: false } });
+                          commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostPaused: false } });
                         } else {
                           commitStore({ ...current, settings: { ...current.settings, speedMultiplier: o.value, speedBoostTimer: 0, speedBoostPaused: false } });
                         }
@@ -1133,16 +1186,21 @@ export default function App() {
                     >
                       <span className="vs-option-main">{o.unlocked ? (store.settings.speedMultiplier === o.value ? <Check size={18} /> : <Zap size={18} />) : <Lock size={18} />}{o.label}</span>
                       {!o.unlocked && <span className="vs-option-note">{o.note}</span>}
-                      {o.unlocked && o.value === 2 && <span className="vs-option-note">{clean(t(lang, 'speed_permanent_unlock'))} (+10 min)</span>}
+                      {o.unlocked && o.value === 2 && <span className="vs-option-note">{store.speedX2Owned ? clean(t(lang, 'speed_permanent_unlock')) : formatTime(store.settings.speedBoostTimer)}</span>}
                     </button>
                   ))}
                 </div>
-                {bosses < 5 && (
+                {!store.speedX2Owned && (
                   <div className="vs-panel vs-panel--inset vs-center">
                     <span>{t(lang, 'speed_requirement_ads')}</span>
                     <button type="button" className="vs-btn vs-btn--gold" onClick={watchSpeedAd}>
                       <Clapperboard size={18} />{clean(t(lang, 'speed_activate_ads'))}
                     </button>
+                    {iapPrices && (
+                      <button type="button" className="vs-btn vs-btn--primary" onClick={() => { setShowSpeedModal(false); goTo('shop'); }}>
+                        <ShoppingBag size={18} />{L(lang, 'x2 per sempre nel negozio', 'x2 forever in the shop', 'x2 para siempre en la tienda', 'x2 pour toujours dans la boutique', '商店永久x2')}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1369,6 +1427,32 @@ export default function App() {
                       if (ok) { const c = storeRef.current; commitStore({ ...c, coins: c.coins + (r.coins || 0), diamonds: c.diamonds + (r.diamonds || 0) }); }
                     }}>
                     <Clapperboard size={15} />{L(lang, 'Guarda', 'Watch ad', 'Ver', 'Voir', '观看')}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>)}
+          {iapPrices && (<>
+            <h2 className="vs-section-title vs-text-violet"><ShoppingBag size={18} />{L(lang, 'Pacchetti', 'Packs', 'Paquetes', 'Packs', '礼包')}</h2>
+            <div className="vs-grid vs-grid--packs">
+              {PACKS.filter(pk => !(pk.id === 'starter_pack' && (store.iapGranted || []).includes('starter_pack')) && !(pk.speed && store.speedX2Owned)).map(pk => (
+                <article key={pk.id} className={`vs-card vs-pack-card${pk.id === 'starter_pack' || pk.id === 'mega_pack' ? ' is-special' : ''}`}>
+                  <span className="vs-pack-title">{packTitle(lang, pk.id)}</span>
+                  <span className="vs-pack-items">
+                    {pk.coins > 0 && <span className="vs-text-gold"><Coins size={18} />{pk.coins.toLocaleString()}</span>}
+                    {pk.diamonds > 0 && <span className="vs-text-cyan"><Gem size={18} />{pk.diamonds.toLocaleString()}</span>}
+                    {pk.ship && <span><Rocket size={18} />{t(lang, SHIPS.find(sh => sh.type === pk.ship)!.nameKey)}</span>}
+                    {pk.speed && <span><Zap size={18} />x2 {L(lang, 'per sempre', 'forever', 'para siempre', 'pour toujours', '永久')}</span>}
+                  </span>
+                  <button type="button" className="vs-btn vs-btn--sm vs-btn--block vs-btn--primary" disabled={iapBusy}
+                    onClick={async () => {
+                      setIapBusy(true);
+                      const ok = await playgama.purchase(pk.id);
+                      // consegna solo a pagamento riuscito (2.4.3), poi i consumabili vanno consumati subito (2.4.4)
+                      if (ok) { commitStore(grantPack(storeRef.current, pk)); if (pk.consumable) await playgama.consumePurchase(pk.id); }
+                      setIapBusy(false);
+                    }}>
+                    <ShoppingBag size={15} />{iapPrices[pk.id] || '…'}
                   </button>
                 </article>
               ))}

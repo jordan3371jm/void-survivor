@@ -69,6 +69,10 @@ export interface GlobalHighScore extends HighScore {
 }
 
 export interface GameStore {
+  /** acquisti permanenti gia' consegnati (pacchetto iniziale, x2 permanente): non vanno ridati */
+  iapGranted?: string[];
+  /** velocita' x2 comprata per sempre */
+  speedX2Owned?: boolean;
   coins: number;
   diamonds: number;
   points: number;
@@ -178,6 +182,8 @@ export function loadStore(): GameStore {
         parsed.coins = (parsed.coins || 0) + 2000;
       }
       if (parsed.currentShip === 'blackhole_ship') parsed.currentShip = 'starter';
+      // il x2 permanente ora si compra: chi lo aveva sbloccato coi boss torna a x1.5 (o x1)
+      if (parsed.settings?.speedMultiplier === 2 && !(parsed.settings.speedBoostTimer > 0) && !parsed.speedX2Owned) parsed.settings = { ...parsed.settings, speedMultiplier: (parsed.userProfile?.totalBossesDefeated || 0) >= 4 ? 1.5 : 1 };
       // la salute ora arriva al livello 500 (prima 200)
       if (parsed.upgrades?.maxHp && (parsed.upgrades.maxHp.maxLevel || 0) < 500) parsed.upgrades = { ...parsed.upgrades, maxHp: { ...parsed.upgrades.maxHp, maxLevel: 500 } };
       return { ...DEFAULT_STORE, ...parsed, stats: { ...DEFAULT_STORE.stats, ...(parsed.stats || {}) }, settings: { ...DEFAULT_STORE.settings, ...(parsed.settings || {}) }, ships: { ...DEFAULT_STORE.ships, ...(parsed.ships || {}) }, upgrades: { ...DEFAULT_STORE.upgrades, ...(parsed.upgrades || {}) } };
