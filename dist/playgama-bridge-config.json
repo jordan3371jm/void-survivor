@@ -28,6 +28,12 @@
         },
         {
           "id": "extra_life"
+        },
+        {
+          "id": "shop_coins"
+        },
+        {
+          "id": "shop_diamonds"
         }
       ]
     },

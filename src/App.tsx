@@ -67,6 +67,8 @@ const SHIPS: { type: string; nameKey: string; price: number; color: string; abil
 ];
 
 // Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
+// Premi del negozio guardando una pubblicita' con premio (senza limite)
+const AD_REWARDS = [{ id: 'shop_coins', coins: 500, diamonds: 0 }, { id: 'shop_diamonds', coins: 0, diamonds: 5 }];
 const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 1000 }, { diamonds: 50, coins: 6000 }, { diamonds: 200, coins: 30000 }, { diamonds: 1000, coins: 180000 }];
 
 const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
@@ -765,7 +767,8 @@ export default function App() {
       if (!rewarded) return;
       const current = storeRef.current;
       const watched = current.settings.adsWatchedForSpeed + 1;
-      if (watched >= 5) {
+      // basta una pubblicita' per il x2 (prima ne servivano 5)
+      if (watched >= 1) {
         const newTimer = Math.min((current.settings.speedBoostTimer || 0) + 600, 86400); // +10 minuti, max 24 ore
         commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostTimer: newTimer, speedBoostPaused: false, adsWatchedForSpeed: 0 } });
       } else {
@@ -1136,9 +1139,8 @@ export default function App() {
                 {bosses < 5 && (
                   <div className="vs-panel vs-panel--inset vs-center">
                     <span>{t(lang, 'speed_requirement_ads')}</span>
-                    <span className="vs-progress vs-progress--wide"><span style={{ width: `${(store.settings.adsWatchedForSpeed / 5) * 100}%` }} /></span>
                     <button type="button" className="vs-btn vs-btn--gold" onClick={watchSpeedAd}>
-                      <Clapperboard size={18} />{clean(t(lang, 'speed_activate_ads'))} ({store.settings.adsWatchedForSpeed}/5)
+                      <Clapperboard size={18} />{clean(t(lang, 'speed_activate_ads'))}
                     </button>
                   </div>
                 )}
@@ -1351,6 +1353,26 @@ export default function App() {
       <div className="vs-screen">
         <TopBar title={clean(t(lang, 'shop'))} icon={<ShoppingBag size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
         <main className="vs-content vs-content--wide">
+          {playgama.isRewardedSupported() && (<>
+            <h2 className="vs-section-title vs-text-gold"><Clapperboard size={18} />{L(lang, 'Gratis con una pubblicità', 'Free with an ad', 'Gratis con un anuncio', 'Gratuit avec une pub', '看广告免费领取')}</h2>
+            <div className="vs-grid vs-grid--exchange">
+              {AD_REWARDS.map(r => (
+                <article key={r.id} className="vs-card vs-exchange-card">
+                  <span className="vs-exchange-coins">{r.coins ? <><Coins size={22} />{r.coins.toLocaleString()}</> : <><Gem size={22} />{r.diamonds}</>}</span>
+                  <button type="button" className="vs-btn vs-btn--sm vs-btn--block vs-btn--gold" disabled={iapBusy}
+                    onClick={async () => {
+                      setIapBusy(true);
+                      const ok = await playgama.showRewarded(r.id).catch(() => false);
+                      setIapBusy(false);
+                      // premio solo se la pubblicita' e' stata vista fino in fondo (checklist 2.2.5)
+                      if (ok) { const c = storeRef.current; commitStore({ ...c, coins: c.coins + (r.coins || 0), diamonds: c.diamonds + (r.diamonds || 0) }); }
+                    }}>
+                    <Clapperboard size={15} />{L(lang, 'Guarda', 'Watch ad', 'Ver', 'Voir', '观看')}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>)}
           <h2 className="vs-section-title vs-text-cyan"><Gem size={18} />{L(lang, 'Cambia diamanti in monete', 'Exchange diamonds for coins', 'Cambia diamantes por monedas', 'Échange tes diamants contre des pièces', '钻石兑换金币')}</h2>
           <div className="vs-grid vs-grid--exchange">
             {DIAMOND_EXCHANGE.map(ex => {
