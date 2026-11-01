@@ -69,7 +69,8 @@ const SHIPS: { type: string; nameKey: string; price: number; color: string; abil
 // Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
 // Premi del negozio guardando una pubblicita' con premio (senza limite)
 const AD_REWARDS = [{ id: 'shop_coins', coins: 500, diamonds: 0 }, { id: 'shop_diamonds', coins: 0, diamonds: 5 }];
-const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 1000 }, { diamonds: 50, coins: 6000 }, { diamonds: 200, coins: 30000 }, { diamonds: 1000, coins: 180000 }];
+// 300 monete per diamante nel cambio piu' piccolo, fino a 500 nel piu' grande (1000 diamanti = 500.000 monete)
+const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 3000 }, { diamonds: 50, coins: 17500 }, { diamonds: 100, coins: 40000 }, { diamonds: 250, coins: 105000 }, { diamonds: 500, coins: 225000 }, { diamonds: 1000, coins: 500000 }];
 
 const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
 const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
