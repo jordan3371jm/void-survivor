@@ -417,6 +417,7 @@ const PL_FROM_EN: Record<string, string> = {
   "Max level + a chest from a boss or mini boss": "Maksymalny poziom + skrzynia z bossa lub minibossa",
   "At max level it evolves into": "Na maksymalnym poziomie ewoluuje w",
   "Bosses and mini bosses drop a chest. Open it with a max-level weapon and it evolves into a legendary weapon, like Photon or Proton Torpedoes!": "Bossowie i minibossowie zostawiają skrzynię. Gdy ją otworzysz z bronią na maksymalnym poziomie, broń ewoluuje w legendarną, na przykład w Torpedy fotonowe albo protonowe!",
+  "Exchange diamonds for coins": "Wymień diamenty na monety",
   "Special ships with the strongest weapons. Yours to keep forever.": "Specjalne statki z najsilniejszą bronią. Zostają twoje na zawsze.",
   "Tutorial": "Samouczek",
   "Show how to play again in your next run": "Pokaż ponownie, jak grać, w następnej rozgrywce",

@@ -1296,3 +1296,6 @@ svg { flex-shrink: 0; }
 .vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { bottom: var(--ad-bottom, 0px); }
 .vs-toast { bottom: calc(24px + var(--safe-b) + var(--ad-bottom, 0px)); }
 .vs-shop-note { margin: 0 0 14px; text-align: center; color: var(--muted, #9aa3c7); font-size: 0.9rem; }
+.vs-grid--exchange { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
+.vs-exchange-card { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 12px; }
+.vs-exchange-coins { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.15rem; color: var(--gold, #fbbf24); }

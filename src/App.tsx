@@ -66,6 +66,9 @@ const SHIPS: { type: string; nameKey: string; price: number; color: string; abil
   { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole', iap: 'ship_void' },
 ];
 
+// Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
+const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 1000 }, { diamonds: 50, coins: 6000 }, { diamonds: 200, coins: 30000 }, { diamonds: 1000, coins: 180000 }];
+
 const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
 const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
 
@@ -1005,7 +1008,7 @@ export default function App() {
     const boostActive = store.settings.speedMultiplier === 2 && store.settings.speedBoostTimer > 0 && !store.settings.speedBoostPaused;
     const boostPaused = store.settings.speedBoostPaused && store.settings.speedBoostTimer > 0;
     const dock = [
-      ...(iapPrices ? [{ key: 'shop', label: clean(t(lang, 'shop')), icon: <ShoppingBag size={20} />, onClick: () => goTo('shop'), tone: 'violet' as const }] : []),
+      { key: 'shop', label: clean(t(lang, 'shop')), icon: <ShoppingBag size={20} />, onClick: () => goTo('shop'), tone: 'violet' },
       { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold', badge: dailyReady ? 1 : 0 },
       { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green', badge: missionsClaimable },
       { key: 'achievements', label: clean(t(lang, 'achievements')), icon: <Target size={20} />, onClick: () => setShowAchievementsModal(true), tone: 'orange', badge: unclaimedAchievements },
@@ -1348,10 +1351,28 @@ export default function App() {
       <div className="vs-screen">
         <TopBar title={clean(t(lang, 'shop'))} icon={<ShoppingBag size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
         <main className="vs-content vs-content--wide">
-          <p className="vs-shop-note">{L(lang, 'Astronavi speciali con le armi più forti. Restano tue per sempre.', 'Special ships with the strongest weapons. Yours to keep forever.', 'Naves especiales con las armas más fuertes. Son tuyas para siempre.', 'Vaisseaux spéciaux avec les armes les plus puissantes. À toi pour toujours.', '拥有最强武器的特殊飞船，永久拥有。')}</p>
-          <div className="vs-grid vs-grid--ships">
-            {SHIPS.filter(sh => sh.iap).map(renderShipCard)}
+          <h2 className="vs-section-title vs-text-cyan"><Gem size={18} />{L(lang, 'Cambia diamanti in monete', 'Exchange diamonds for coins', 'Cambia diamantes por monedas', 'Échange tes diamants contre des pièces', '钻石兑换金币')}</h2>
+          <div className="vs-grid vs-grid--exchange">
+            {DIAMOND_EXCHANGE.map(ex => {
+              const can = store.diamonds >= ex.diamonds;
+              return (
+                <article key={ex.diamonds} className="vs-card vs-exchange-card">
+                  <span className="vs-exchange-coins"><Coins size={22} />{ex.coins.toLocaleString()}</span>
+                  <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${can ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!can}
+                    onClick={() => { const c = storeRef.current; if (c.diamonds < ex.diamonds) return; commitStore({ ...c, diamonds: c.diamonds - ex.diamonds, coins: c.coins + ex.coins }); }}>
+                    <Gem size={15} />{ex.diamonds}
+                  </button>
+                </article>
+              );
+            })}
           </div>
+          {iapPrices && (<>
+            <h2 className="vs-section-title vs-text-gold"><Rocket size={18} />{t(lang, 'astronavi')}</h2>
+            <p className="vs-shop-note">{L(lang, 'Astronavi speciali con le armi più forti. Restano tue per sempre.', 'Special ships with the strongest weapons. Yours to keep forever.', 'Naves especiales con las armas más fuertes. Son tuyas para siempre.', 'Vaisseaux spéciaux avec les armes les plus puissantes. À toi pour toujours.', '拥有最强武器的特殊飞船，永久拥有。')}</p>
+            <div className="vs-grid vs-grid--ships">
+              {SHIPS.filter(sh => sh.iap).map(renderShipCard)}
+            </div>
+          </>)}
         </main>
       </div>
     );
