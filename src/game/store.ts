@@ -195,10 +195,10 @@ export function saveStore(store: GameStore): void {
 // Prima crescevano del 40-50% a ogni livello e dopo pochi acquisti costavano decine di migliaia di monete.
 const linearCost = (base: number, level: number) => Math.round(base * (1 + 0.15 * level));
 
-// Salute: +15 monete per livello, e ogni 100 livelli l'aumento per livello cresce del 50% (100, 200, 300, 400)
+// Salute: +50 monete per livello nei primi 100 livelli, poi +100, +200, +400... (raddoppia ogni 100 livelli)
 export function getUpgradeCost(level: number): number {
   let cost = 100;
-  for (let tier = 0; tier * 100 < level; tier++) cost += Math.min(100, level - tier * 100) * 15 * (1 + 0.5 * tier);
+  for (let tier = 0; tier * 100 < level; tier++) cost += Math.min(100, level - tier * 100) * 50 * Math.pow(2, tier);
   return Math.round(cost);
 }
 
