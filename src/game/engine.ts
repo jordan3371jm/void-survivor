@@ -764,7 +764,7 @@ export function updateGame(state: GameState, dt: number): void {
     // Durante un boss arrivano il 70% di nemici in meno: lo scontro col boss resta al centro della scena
     // piu' si va avanti di ondata piu' nemici arrivano (prima il ritmo si fermava a 8 al secondo dopo 2 minuti)
     const spawnRate = Math.min(1 + state.time / 20, 8) * (1 + Math.max(0, state.wave - 1) * 0.045) * (1 + postBossStep(state) * 0.2) * curseSpawn * (state.bossActive ? 0.3 : 1);
-    if (Math.random() < spawnRate * gameDt) {
+    if (Math.random() < spawnRate * gameDt && enemyRoom(state) > 0) {
       const wave1: EnemyType[] = ['asteroid_small', 'swarm', 'drone_sentinel', 'cosmic_leech', 'star_beetle'];
       const wave2: EnemyType[] = ['asteroid_small', 'asteroid_medium', 'drone_sentinel', 'star_raider', 'void_crawler', 'star_fish'];
       const wave3: EnemyType[] = ['asteroid_medium', 'asteroid_large', 'star_raider', 'nebula_wraith', 'star_jelly', 'star_scorpion'];
@@ -773,11 +773,11 @@ export function updateGame(state: GameState, dt: number): void {
       let types: EnemyType[];
       if (state.time < 30) types = wave1; else if (state.time < 60) types = wave2; else if (state.time < 120) types = wave3; else if (state.time < 180) types = wave4; else types = wave5;
       const type = types[Math.floor(Math.random() * types.length)];
-      if (type === 'swarm') { for (let i = 0; i < Math.round(5 * curseSpawn); i++) state.enemies.push(spawnEnemy(state, 'swarm')); }
+      if (type === 'swarm') { for (let i = 0; i < Math.min(Math.round(5 * curseSpawn), enemyRoom(state)); i++) state.enemies.push(spawnEnemy(state, 'swarm')); }
       else {
         const extra = curseSpawn - 1; // quantita': 1 nemico + quota di maledizione (parte frazionaria casuale)
         const copies = 1 + Math.floor(extra) + (Math.random() < extra - Math.floor(extra) ? 1 : 0) + (state.wave >= 8 && Math.random() < Math.min(0.6, (state.wave - 7) * 0.03) ? 1 : 0);
-        for (let i = 0; i < copies; i++) state.enemies.push(spawnEnemy(state, type));
+        for (let i = 0; i < Math.min(copies, enemyRoom(state)); i++) state.enemies.push(spawnEnemy(state, type));
       }
     }
   }
@@ -812,7 +812,8 @@ export function updateGame(state: GameState, dt: number): void {
     for (const s of ready) {
       const dist0 = 650 + Math.random() * 100;
       const cx = state.player.pos.x + Math.cos(s.a) * dist0, cy = state.player.pos.y + Math.sin(s.a) * dist0;
-      for (let i = 0; i < s.n; i++) { const e = spawnEnemy(state, 'swarm'); const r = Math.random() * 90, b = Math.random() * Math.PI * 2; e.pos = { x: cx + Math.cos(b) * r, y: cy + Math.sin(b) * r }; e.damage *= 0.6; state.enemies.push(e); }
+      const n = Math.min(s.n, enemyRoom(state));
+      for (let i = 0; i < n; i++) { const e = spawnEnemy(state, 'swarm'); const r = Math.random() * 90, b = Math.random() * Math.PI * 2; e.pos = { x: cx + Math.cos(b) * r, y: cy + Math.sin(b) * r }; e.damage *= 0.6; state.enemies.push(e); }
     }
   }
   if ((state as any).eventBanner) { (state as any).eventBanner.t -= gameDt; if ((state as any).eventBanner.t <= 0) (state as any).eventBanner = null; }
@@ -1078,17 +1079,8 @@ export function updateGame(state: GameState, dt: number): void {
     }
     state.expOrbs = mergedOrbs;
   }
-  // Limiti ottimizzati per performance - PROTEGGI I BOSS!
-  if (state.enemies.length > 150) {
-    const bosses = state.enemies.filter(e => e.isBoss || e.isMini); // i mini boss non vengono mai tolti dal limite
-    const normalEnemies = state.enemies.filter(e => !e.isBoss && !e.isMini);
-    // dopo il 4o boss il tetto sale un po' a ogni boss (piu' mostri), restando leggero per i telefoni
-    const cap = Math.min(260, 190 + postBossStep(state) * 14);
-    if (normalEnemies.length > cap) {
-      normalEnemies.splice(0, normalEnemies.length - (cap - 50));
-    }
-    state.enemies = [...bosses, ...normalEnemies];
-  }
+  // Limite di mostri: i nemici vivi non vengono MAI tolti (prima sparivano a decine all'improvviso);
+  // quando si e' al limite semplicemente non ne arrivano di nuovi (vedi enemyRoom)
   if (state.projectiles.length > 200) state.projectiles.splice(0, state.projectiles.length - 200);
   if (state.particles.length > 150) state.particles.splice(0, state.particles.length - 150);
   // troppi cristalli a terra: i piu' vecchi si fondono con altri (prima venivano cancellati e l'esperienza andava persa)
@@ -2014,4 +2006,11 @@ function drawSpecialPool(ctx: CanvasRenderingContext2D, pool: NebulaPool, state:
 /** Quanti boss sono stati sconfitti oltre il terzo: da li' in poi ogni boss rende le ondate piu' dure. */
 function postBossStep(state: GameState): number {
   return state.gameMode === 'boss_rush' ? 0 : Math.max(0, (state.bossesDefeated || 0) - 3);
+}
+
+/** Quanti mostri normali possono ancora entrare in scena (il tetto sale un po' dopo il 4o boss). */
+function enemyRoom(state: GameState): number {
+  const cap = Math.min(270, 200 + postBossStep(state) * 14);
+  let normal = 0; for (const e of state.enemies) if (!e.isBoss && !e.isMini) normal++;
+  return Math.max(0, cap - normal);
 }

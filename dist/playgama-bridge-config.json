@@ -84,6 +84,18 @@
         ],
         "desktop:landscape:w>1300": [
           {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
+            "bottom": "0%",
+            "left": "0%"
+          },
+          {
             "width": "12%",
             "height": "60%",
             "top": "20%",
@@ -141,6 +153,18 @@
         ],
         "desktop:landscape:w>1400": [
           {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
+            "bottom": "0%",
+            "left": "0%"
+          },
+          {
             "width": "10%",
             "height": "44%",
             "top": "28%",
@@ -192,6 +216,20 @@
           {
             "width": "100%",
             "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "desktop:landscape:w>1300": [
+          {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
             "bottom": "0%",
             "left": "0%"
           }

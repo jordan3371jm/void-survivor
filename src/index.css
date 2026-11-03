@@ -1293,7 +1293,7 @@ svg { flex-shrink: 0; }
 }
 
 /* Banner Playgama in basso (telefoni, tablet, finestre piccole): schermate e finestre finiscono sopra la striscia */
-.vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { bottom: var(--ad-bottom, 0px); }
+.vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { top: var(--ad-top, 0px); bottom: var(--ad-bottom, 0px); }
 .vs-toast { bottom: calc(24px + var(--safe-b) + var(--ad-bottom, 0px)); }
 .vs-shop-note { margin: 0 0 14px; text-align: center; color: var(--muted, #9aa3c7); font-size: 0.9rem; }
 .vs-grid--exchange { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
