@@ -1281,7 +1281,7 @@ svg { flex-shrink: 0; }
 /* Checklist Playgama: su finestre molto larghe il gioco non supera il rapporto 2:1 (margini ai lati) */
 @media (min-aspect-ratio: 2/1) {
   html, body { background: #000; }
-  .vs-game, .vs-screen { left: 50%; right: auto; width: 200vh; transform: translateX(-50%); }
+  .vs-game, .vs-screen { left: 50%; right: auto; width: min(200vh, calc(100vw - var(--ad-left, 0px) - var(--ad-right, 0px))); transform: translateX(-50%); }
 }
 .vs-you { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; color: #04121a; background: var(--cyan); vertical-align: middle; }
 .vs-game-canvas:focus { outline: none; }
@@ -1293,7 +1293,7 @@ svg { flex-shrink: 0; }
 }
 
 /* Banner Playgama in basso (telefoni, tablet, finestre piccole): schermate e finestre finiscono sopra la striscia */
-.vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { top: var(--ad-top, 0px); bottom: var(--ad-bottom, 0px); }
+.vs-screen, .vs-game, .vs-modal-backdrop, .vs-overlay, .vs-legacy-backdrop, .vs-countdown { top: var(--ad-top, 0px); bottom: var(--ad-bottom, 0px); left: var(--ad-left, 0px); right: var(--ad-right, 0px); }
 .vs-toast { bottom: calc(24px + var(--safe-b) + var(--ad-bottom, 0px)); }
 .vs-shop-note { margin: 0 0 14px; text-align: center; color: var(--muted, #9aa3c7); font-size: 0.9rem; }
 .vs-grid--exchange { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 8px; }
@@ -1306,3 +1306,7 @@ svg { flex-shrink: 0; }
 .vs-pack-title { font-weight: 800; font-size: 0.9rem; }
 .vs-pack-items { display: flex; flex-direction: column; align-items: center; gap: 4px; font-family: var(--font-display); font-size: 1rem; flex: 1; }
 .vs-pack-items > span { display: inline-flex; align-items: center; gap: 6px; }
+/* finestre molto larghe (oltre 2:1): il gioco resta centrato e non supera il 2:1 anche con i banner ai lati */
+@media (min-aspect-ratio: 2/1) {
+  .vs-game, .vs-screen { left: 50%; right: auto; width: min(200vh, calc(100vw - var(--ad-left, 0px) - var(--ad-right, 0px))); transform: translateX(-50%); }
+}

@@ -244,7 +244,7 @@ class PlaygamaSDK {
   }
 
   // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:
-  // - computer con finestra larga: una striscia in alto e una in basso (il gioco sta in mezzo) e, in menu e partita, due banner stretti ai lati
+  // - computer (qualsiasi finestra): 4 banner, sopra, sotto, a sinistra e a destra, con il gioco in mezzo
   // - tutto il resto (telefoni, tablet, finestre piccole, altre schermate): una striscia in basso,
   //   e il gioco si restringe sopra (variabile CSS --ad-bottom), cosi' nessun pulsante finisce sotto.
   // Le soglie qui devono restare uguali alle chiavi di public/playgama-bridge-config.json.
@@ -269,26 +269,26 @@ class PlaygamaSDK {
     const device: string = this.bridge.device?.type || 'desktop';
     const landscape = w > h;
     const target = this.bannerWanted;
-    // % dell'altezza della finestra occupata dalle strisce in alto e in basso
-    let top = 0, bottom = 0;
+    // spazio riservato ai banner (% della finestra): il gioco sta in mezzo e nessun banner copre niente
+    let top = 0, bottom = 0, side = 0;
     if (target) {
-      const wideDesktop = device === 'desktop' && landscape;
-      const side = wideDesktop && ((target === 'menu' && w > 1300) || (target === 'gameplay' && w > 1400));
-      if (side || (wideDesktop && target === 'pages' && w > 1300)) { top = 7; bottom = 7; } // computer largo: 4 banner (sopra, sotto, ai lati)
+      if (device === 'desktop') { top = 7; bottom = 7; side = 10; } // ogni computer: 4 banner (sopra, sotto, sinistra, destra)
       else bottom = device === 'mobile' ? (landscape ? 14 : 8) : device === 'tablet' ? (landscape ? 8 : 6) : 8;
     }
-    const px = (v: number) => v ? Math.round(h * v / 100) + 'px' : '0px';
-    const key = px(top) + '|' + px(bottom);
+    const pxH = (v: number) => v ? Math.round(h * v / 100) + 'px' : '0px';
+    const pxW = (v: number) => v ? Math.round(w * v / 100) + 'px' : '0px';
+    const key = [pxH(top), pxH(bottom), pxW(side)].join('|');
     if (target === this.bannerShown && key === this.bannerReserve) return;
     try {
       if (target) ad.showAdvancedBanners(target); else ad.hideAdvancedBanners();
       this.bannerShown = target;
-    } catch (e) { console.warn('[Playgama] banner', e); top = 0; bottom = 0; }
-    const finalKey = px(top) + '|' + px(bottom);
+    } catch (e) { console.warn('[Playgama] banner', e); top = 0; bottom = 0; side = 0; }
+    const finalKey = [pxH(top), pxH(bottom), pxW(side)].join('|');
     if (finalKey !== this.bannerReserve) {
       this.bannerReserve = finalKey;
-      document.documentElement.style.setProperty('--ad-top', px(top));
-      document.documentElement.style.setProperty('--ad-bottom', px(bottom));
+      const st = document.documentElement.style;
+      st.setProperty('--ad-top', pxH(top)); st.setProperty('--ad-bottom', pxH(bottom));
+      st.setProperty('--ad-left', pxW(side)); st.setProperty('--ad-right', pxW(side));
       window.dispatchEvent(new Event('resize')); // il canvas ricalcola la sua dimensione
     }
   }
