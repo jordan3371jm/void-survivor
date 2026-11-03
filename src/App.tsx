@@ -465,6 +465,7 @@ export default function App() {
     if (runFinalizedRef.current || !state) return;
     runFinalizedRef.current = true;
     trackRunEnd(state, state.victory ? 'victory' : state.gameOver ? 'death' : 'quit');
+    playgama.gameEvent(state.victory ? 'level_completed' : 'level_failed');
 
     const score = state.kills * 10 + Math.floor(state.time) * 5;
     let ns: GameStore = {
@@ -636,6 +637,7 @@ export default function App() {
       finalizeRun(); // sicurezza: la partita precedente viene sempre accreditata una sola volta
       const s = storeRef.current;
       const newState = engine.createInitialState(s.currentShip as any, mode);
+      playgama.gameEvent('level_started');
       // Potenziamenti del negozio: non valgono nella Boss Rush (senza nemici normali la renderebbero troppo facile)
       if (mode !== 'boss_rush') {
         newState.player.maxHp = s.stats.maxHp || 100;
@@ -781,6 +783,7 @@ export default function App() {
   }, []);
 
   const setPausedState = useCallback((value: boolean) => {
+    if (value !== pausedRef.current && gameStateRef.current && !gameStateRef.current.gameOver) playgama.gameEvent(value ? 'level_paused' : 'level_resumed');
     pausedRef.current = value;
     setPaused(value);
     setAudioPaused(value || platformPausedRef.current);

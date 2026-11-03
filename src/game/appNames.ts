@@ -1,13 +1,13 @@
 // ---------------------------------------------------------------------------
 // Nomi usati SOLO nell'app Android/iOS: gli store rifiutano le app che usano marchi registrati
 // (Star Wars, Star Trek, Alien...). Sul web (Playgama) restano i nomi originali.
-// Anche la build per Klyo Games (VITE_TARGET=klyo) usa i nomi senza marchi e la musica CC0.
+// Anche le build per Klyo Games e CrazyGames (VITE_TARGET=klyo / crazygames) usano i nomi senza marchi e la musica CC0.
 // ---------------------------------------------------------------------------
 import { Capacitor } from '@capacitor/core';
 
 let native: boolean | null = null;
 export function isApp(): boolean {
-  if (import.meta.env.VITE_TARGET === 'klyo') return true;
+  if (import.meta.env.VITE_TARGET === 'klyo' || import.meta.env.VITE_TARGET === 'crazygames') return true;
   if (native === null) { try { native = Capacitor.isNativePlatform(); } catch { native = false; } }
   return native;
 }

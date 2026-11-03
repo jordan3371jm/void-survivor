@@ -2,7 +2,7 @@
 // Documentazione: https://wiki.playgama.com/playgama/bridge-sdk
 
 import { Capacitor } from '@capacitor/core';
-import { isKlyo, klyoSdk } from './klyo';
+import { isKlyo, isCrazy, klyoSdk } from './klyo';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
@@ -213,9 +213,16 @@ class PlaygamaSDK {
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
+  /** Eventi di gioco per la piattaforma (su CrazyGames diventano gameplayStart / gameplayStop). */
+  gameEvent(msg: 'level_started' | 'level_paused' | 'level_resumed' | 'level_completed' | 'level_failed'): void {
+    if (!this.isInitialized() || isKlyo) return;
+    try { this.bridge.platform.sendMessage(msg); } catch (e) { console.warn('[Playgama] evento', msg, e); }
+  }
+
   // Acquisti con soldi veri (Bridge payments): solo dove la piattaforma li supporta
   paymentsSupported(): boolean {
-    return this.isInitialized() && !isKlyo && !!this.bridge?.payments?.isSupported;
+    // su CrazyGames i pagamenti passano da Xsolla e vanno configurati a parte: per ora niente negozio a pagamento
+    return this.isInitialized() && !isKlyo && !isCrazy && !!this.bridge?.payments?.isSupported;
   }
   async getCatalog(): Promise<Record<string, string>> {
     if (!this.paymentsSupported()) return {};

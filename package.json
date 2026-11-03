@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "build:klyo": "VITE_TARGET=klyo vite build --outDir dist-klyo && rm -f dist-klyo/audio/bgm.mp3 dist-klyo/playgama-bridge-config.json dist-klyo/assets/firebase-*.js && cp -r klyo/CREDITS.md klyo/LICENSES dist-klyo/ && rm -f void-survivors-klyo.zip && cd dist-klyo && zip -qr ../void-survivors-klyo.zip .",
     "build:android": "vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android",
-    "build:android:test": "VITE_ADS_TEST=1 vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android"
+    "build:android:test": "VITE_ADS_TEST=1 vite build && rm -rf dist-app && cp -r dist dist-app && rm -f dist-app/audio/bgm.mp3 dist-app/playgama-bridge-config.json && npx cap sync android",
+    "build:crazygames": "VITE_TARGET=crazygames vite build --outDir dist-crazygames && rm -f dist-crazygames/audio/bgm.mp3 && cp -r klyo/CREDITS.md klyo/LICENSES dist-crazygames/ && rm -f void-survivors-crazygames.zip && cd dist-crazygames && zip -qr ../void-survivors-crazygames.zip ."
   },
   "dependencies": {
     "@capacitor-community/admob": "^7.2.0",
