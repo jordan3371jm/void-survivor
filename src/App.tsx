@@ -1193,7 +1193,7 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                {!store.speedX2Owned && (
+                {!store.speedX2Owned && (playgama.isRewardedSupported() || iapPrices) && (
                   <div className="vs-panel vs-panel--inset vs-center">
                     <span>{t(lang, 'speed_requirement_ads')}</span>
                     <button type="button" className="vs-btn vs-btn--gold" onClick={watchSpeedAd}>

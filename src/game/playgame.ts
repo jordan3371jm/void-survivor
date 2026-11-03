@@ -2,7 +2,7 @@
 // Documentazione: https://wiki.playgama.com/playgama/bridge-sdk
 
 import { Capacitor } from '@capacitor/core';
-import { isKlyo, isCrazy, klyoSdk } from './klyo';
+import { isKlyo, isCrazy, adsOff, klyoSdk } from './klyo';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
@@ -133,7 +133,7 @@ class PlaygamaSDK {
       if (!this.klyo.adBreak) return;
       return new Promise<void>((resolve) => { try { this.klyo.adBreak('after-loss', () => resolve()); } catch { resolve(); } });
     }
-    if (!this.isInitialized() || !this.bridge.advertisement) return;
+    if (adsOff || !this.isInitialized() || !this.bridge.advertisement) return;
 
     try {
       if (!this.bridge.advertisement.isInterstitialSupported) return;
@@ -145,7 +145,7 @@ class PlaygamaSDK {
 
   async showRewarded(placement: string = 'extra_life'): Promise<boolean> {
     if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeRewarded(); }
-    if (this.klyo) return false;
+    if (this.klyo || adsOff) return false;
     if (!this.isInitialized() || !this.bridge.advertisement) return false;
 
     return new Promise((resolve) => {
@@ -203,13 +203,14 @@ class PlaygamaSDK {
   isInterstitialSupported(): boolean {
     if (isNativeApp()) return true;
     if (this.klyo) return !!this.klyo.adBreak;
+    if (adsOff) return false;
     return this.isInitialized() && !!this.bridge.advertisement?.isInterstitialSupported;
   }
 
   isRewardedSupported(): boolean {
     if (isNativeApp()) return true;
     // Su Klyo la pubblicita' con premio non e' ancora attiva: nessun pulsante "guarda la pubblicita'"
-    if (this.klyo) return false;
+    if (this.klyo || adsOff) return false;
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
@@ -260,6 +261,7 @@ class PlaygamaSDK {
   private bannerReserve = '';
   private bannerResizeHooked = false;
   setSideBanners(placement: 'menu' | 'gameplay' | 'pages' | null): void {
+    if (adsOff) return;
     this.bannerWanted = placement;
     if (!this.bannerResizeHooked && typeof window !== 'undefined') {
       this.bannerResizeHooked = true;
