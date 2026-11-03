@@ -16,6 +16,13 @@ const dirty = new Set<string>();
 const sessionMemory = new Map<string, string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let listenersAttached = false;
+// Finche' i salvataggi non sono stati letti dalla piattaforma NON si scrive nulla: se il Bridge rispondeva
+// dopo il tetto di attesa dell'avvio, il primo salvataggio (es. la lingua) partiva da un profilo vuoto
+// e cancellava i progressi nel cloud.
+let ready = false;
+let started = false;
+/** Evento lanciato quando i salvataggi arrivano dopo che il gioco e' gia' partito con i valori di default */
+export const STORAGE_LATE_EVENT = 'vs-storage-late';
 
 /** Chiavi fisse del gioco, caricate insieme all'avvio. */
 export const STORAGE_KEYS = [
@@ -64,7 +71,50 @@ export async function loadStorageKeys(keys: string[]): Promise<void> {
 /** Da chiamare all'avvio, dopo l'inizializzazione del Bridge. */
 export async function preloadStorage(): Promise<void> {
   attachListeners();
-  await loadStorageKeys(STORAGE_KEYS);
+  try {
+    await loadStorageKeys(STORAGE_KEYS);
+  } finally {
+    ready = true;
+    // Il gioco era gia' partito (attesa scaduta): i dati salvati vincono su quelli scritti nel frattempo
+    if (started) {
+      for (const k of STORAGE_KEYS) if (cache.has(k)) dirty.delete(k);
+      try { window.dispatchEvent(new Event(STORAGE_LATE_EVENT)); } catch { /* ignora */ }
+    }
+    if (dirty.size) flushStorage();
+  }
+}
+
+/** Il gioco e' stato disegnato: da qui in poi un caricamento tardivo va segnalato con STORAGE_LATE_EVENT */
+export function markGameStarted(): void {
+  started = true;
+}
+
+/**
+ * Dopo l'accesso all'account della piattaforma i salvataggi passano al cloud dell'account: si rileggono.
+ * Se l'account ha gia' dei progressi (es. da un altro dispositivo) vincono quelli; se e' vuoto
+ * ci si copiano i progressi giocati finora da ospite.
+ */
+export async function reloadAfterLogin(): Promise<void> {
+  const st = storageApi();
+  if (!st) return;
+  let res: any;
+  try { res = await st.get(STORAGE_KEYS); } catch (e) { console.warn('[Storage] rilettura dopo l\'accesso fallita', e); return; }
+  const fresh = new Map<string, string>();
+  STORAGE_KEYS.forEach((key, i) => {
+    const v = Array.isArray(res) ? res[i] : res && typeof res === 'object' ? res[key] : null;
+    if (v !== null && v !== undefined) fresh.set(key, typeof v === 'string' ? v : JSON.stringify(v));
+  });
+  if (fresh.has('voidSurvivorsStore')) {
+    fresh.forEach((v, k) => { cache.set(k, v); dirty.delete(k); });
+    try { window.dispatchEvent(new Event(STORAGE_LATE_EVENT)); } catch { /* ignora */ }
+  } else {
+    for (const k of STORAGE_KEYS) if (cache.has(k)) dirty.add(k);
+    flushStorage();
+  }
+}
+
+export function isStorageReady(): boolean {
+  return ready;
 }
 
 export function storageGetItem(key: string): string | null {
@@ -78,6 +128,7 @@ export function flushStorage(): void {
     flushTimer = null;
   }
   if (dirty.size === 0) return;
+  if (!ready) return; // si scrive solo dopo aver letto i salvataggi (vedi preloadStorage)
   const keys = Array.from(dirty);
   dirty.clear();
   const st = storageApi();

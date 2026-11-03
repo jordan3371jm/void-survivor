@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { CalendarDays, CalendarRange, Check, Clock, Coins, Crown, Gem, Gift, Rocket, Skull, Sparkles, Star, Swords, Timer, Waves, X, Sun } from 'lucide-react';
 import { GameStore } from './game/store';
 import { Language } from './game/i18n';
+import { plFromEn } from './game/pl';
 import { claimMission, getMissionsState, missionText, missionValue, msUntilReset, MissionKind, MissionPeriod, MissionsState } from './game/dailyChallenges';
 
 interface DailyEventsModalProps { store: GameStore; setStore: (store: GameStore) => void; lang: Language; onClose: () => void; }
 
-const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 
 const ICONS: Record<MissionKind, React.ReactNode> = {
   kills: <Skull size={22} />, bosses: <Crown size={22} />, coins: <Coins size={22} />, runs: <Rocket size={22} />, chests: <Gift size={22} />,

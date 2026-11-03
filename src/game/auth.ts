@@ -1,6 +1,11 @@
 import { storageGetItem, storageSetItem, sessionGetItem, sessionSetItem, sessionRemoveItem } from './storage';
 import { bridgeCreateUser, bridgeGetUser, bridgeSaveScore, bridgeGetLeaderboard, bridgeGetUserScores, bridgeSavePlayerData, bridgeLoadPlayerData } from './bridge';
 import type { GameStore } from './store';
+import { isKlyo, klyoSdk } from './klyo';
+
+// Nella build per Klyo Firebase non entra nel pacchetto (Klyo rifiuta i backend esterni)
+const loadFirebase = (): Promise<typeof import('./firebase')> =>
+  isKlyo ? Promise.reject(new Error('Firebase non disponibile su Klyo')) : import('./firebase');
 
 export function isPlaygama(): boolean {
   return typeof (window as any).bridge !== 'undefined';
@@ -60,7 +65,7 @@ export async function loginWithEmail(email: string, password: string): Promise<a
       displayName: localUser.username
     };
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     return await firebase.loginWithEmail(email, password);
   }
 }
@@ -91,7 +96,7 @@ export async function registerWithEmail(email: string, password: string, usernam
       displayName: newUser.username
     };
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     return await firebase.registerWithEmail(email, password, username);
   }
 }
@@ -100,12 +105,13 @@ export async function logout() {
   if (isPlaygama()) {
     setCurrentLocalUser(null);
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     await firebase.logout();
   }
 }
 
 export function observeAuth(callback: (user: any) => void) {
+  if (isKlyo) return () => {};
   if (isPlaygama()) {
     const currentUser = getCurrentLocalUser();
     if (currentUser) {
@@ -120,7 +126,7 @@ export function observeAuth(callback: (user: any) => void) {
     let cancelled = false;
     let unsubscribe: (() => void) | undefined;
 
-    void import('./firebase')
+    void loadFirebase()
       .then(({ observeAuth: observeFirebaseAuth }) => {
         if (!cancelled) unsubscribe = observeFirebaseAuth(callback);
       })
@@ -136,10 +142,16 @@ export function observeAuth(callback: (user: any) => void) {
 }
 
 export async function saveGlobalScore(userId: string, playerName: string, playerAvatar: string, score: number, kills: number, time: number, level: number) {
+  if (isKlyo) {
+    // Classifica Klyo: un punteggio a fine partita
+    const k = klyoSdk();
+    if (k?.score) k.score(Math.max(0, Math.round(score)), () => {});
+    return;
+  }
   if (isPlaygama()) {
     await bridgeSaveScore(userId, playerName, score, kills, time, level);
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     await firebase.saveGlobalScore(userId, playerName, playerAvatar, score, kills, time, level);
   }
 }
@@ -159,7 +171,7 @@ export async function getGlobalLeaderboard(): Promise<any[]> {
       date: s.createdAt || new Date().toISOString()
     }));
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     return await firebase.getGlobalLeaderboard();
   }
 }
@@ -179,12 +191,13 @@ export async function getUserScores(userId: string): Promise<any[]> {
       date: s.createdAt || new Date().toISOString()
     }));
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     return await firebase.getUserScores(userId);
   }
 }
 
 export async function saveUserData(userId: string, store: GameStore) {
+  if (isKlyo) return; // Klyo copia da solo i salvataggi locali sull'account del giocatore
   if (isPlaygama()) {
     const data = {
       coins: store.coins,
@@ -200,12 +213,13 @@ export async function saveUserData(userId: string, store: GameStore) {
     };
     await bridgeSavePlayerData(userId, data);
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     await firebase.saveUserData(userId, store);
   }
 }
 
 export async function loadUserData(userId: string): Promise<any> {
+  if (isKlyo) return null;
   if (isPlaygama()) {
     const data = await bridgeLoadPlayerData(userId);
     if (data) {
@@ -224,7 +238,7 @@ export async function loadUserData(userId: string): Promise<any> {
     }
     return null;
   } else {
-    const firebase = await import('./firebase');
+    const firebase = await loadFirebase();
     return await firebase.loadUserData(userId);
   }
 }

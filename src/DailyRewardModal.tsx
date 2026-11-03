@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Check, Coins, Flame, Gem, Gift, Lock, X } from 'lucide-react';
 import { GameStore } from './game/store';
 import { Language } from './game/i18n';
+import { plFromEn } from './game/pl';
 import { getLoginRewardsState, claimDailyReward, LoginRewardsState } from './game/loginRewards';
 
 interface DailyRewardModalProps { store: GameStore; setStore: (store: GameStore) => void; lang: Language; onClose: () => void; }
 
-const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 
 export const DailyRewardModal: React.FC<DailyRewardModalProps> = ({ store, setStore, lang, onClose }) => {
   const [loginState, setLoginState] = useState<LoginRewardsState>(() => getLoginRewardsState());

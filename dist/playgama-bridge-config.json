@@ -28,8 +28,225 @@
         },
         {
           "id": "extra_life"
+        },
+        {
+          "id": "shop_coins"
+        },
+        {
+          "id": "shop_diamonds"
         }
       ]
+    },
+    "advancedBanners": {
+      "disable": false,
+      "placementFallback": "pages",
+      "menu": {
+        "action": "show",
+        "default": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:portrait": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:landscape": [
+          {
+            "width": "100%",
+            "height": "14%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:portrait": [
+          {
+            "width": "100%",
+            "height": "6%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:landscape": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "desktop": [
+          {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
+            "bottom": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "right": "0%"
+          }
+        ]
+      },
+      "gameplay": {
+        "action": "show",
+        "default": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:portrait": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:landscape": [
+          {
+            "width": "100%",
+            "height": "14%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:portrait": [
+          {
+            "width": "100%",
+            "height": "6%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:landscape": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "desktop": [
+          {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
+            "bottom": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "right": "0%"
+          }
+        ]
+      },
+      "pages": {
+        "action": "show",
+        "default": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:portrait": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "mobile:landscape": [
+          {
+            "width": "100%",
+            "height": "14%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:portrait": [
+          {
+            "width": "100%",
+            "height": "6%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "tablet:landscape": [
+          {
+            "width": "100%",
+            "height": "8%",
+            "bottom": "0%",
+            "left": "0%"
+          }
+        ],
+        "desktop": [
+          {
+            "width": "100%",
+            "height": "7%",
+            "top": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "100%",
+            "height": "7%",
+            "bottom": "0%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "left": "0%"
+          },
+          {
+            "width": "10%",
+            "height": "86%",
+            "top": "7%",
+            "right": "0%"
+          }
+        ]
+      }
     }
   },
   "saas": {
@@ -45,6 +262,65 @@
     {
       "id": "void-survivor.scores",
       "isMain": true
+    }
+  ],
+  "payments": [
+    {
+      "id": "ship_boomerang"
+    },
+    {
+      "id": "ship_viper"
+    },
+    {
+      "id": "ship_laser"
+    },
+    {
+      "id": "ship_quantum"
+    },
+    {
+      "id": "ship_kinetic"
+    },
+    {
+      "id": "ship_tie_fighter"
+    },
+    {
+      "id": "ship_void"
+    },
+    {
+      "id": "ship_federation"
+    },
+    {
+      "id": "coins_small"
+    },
+    {
+      "id": "coins_medium"
+    },
+    {
+      "id": "coins_large"
+    },
+    {
+      "id": "coins_huge"
+    },
+    {
+      "id": "diamonds_small"
+    },
+    {
+      "id": "diamonds_medium"
+    },
+    {
+      "id": "diamonds_large"
+    },
+    {
+      "id": "diamonds_huge"
+    },
+    {
+      "id": "starter_pack"
+    },
+    {
+      "id": "mega_pack"
+    },
+    {
+      "id": "speed_x2"
     }
   ]
 }

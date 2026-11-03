@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Crosshair, Crown, Gem, Gift, Move, ShoppingCart, Sparkles, X } from 'lucide-react';
 import { Language } from './game/i18n';
+import { plFromEn } from './game/pl';
 
-const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => ({ it, en, es, fr, zh }[lang] ?? en);
+const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 
 interface TutorialProps { lang: Language; touch: boolean; onClose: (completed: boolean, step: number) => void; }
 
@@ -14,7 +15,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
       title: L(lang, 'Muoviti', 'Move', 'Muévete', 'Déplace-toi', '移动'),
       text: touch
         ? L(lang, 'Trascina il dito sullo schermo per pilotare la nave. Evita i nemici: il contatto fa danno!', 'Drag your finger on the screen to steer the ship. Avoid enemies: touching them hurts!', 'Arrastra el dedo por la pantalla para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño!', "Fais glisser ton doigt sur l'écran pour piloter le vaisseau. Évite les ennemis : leur contact fait mal !", '在屏幕上拖动手指操控飞船。躲开敌人：碰到会受伤！')
-        : L(lang, 'Usa WASD o le frecce per pilotare la nave. Evita i nemici: il contatto fa danno! Esc mette in pausa.', 'Use WASD or the arrow keys to steer the ship. Avoid enemies: touching them hurts! Esc pauses.', 'Usa WASD o las flechas para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño! Esc pausa.', 'Utilise ZQSD/WASD ou les flèches pour piloter. Évite les ennemis : leur contact fait mal ! Échap met en pause.', '使用WASD或方向键操控飞船。躲开敌人：碰到会受伤！Esc暂停。'),
+        : L(lang, 'Usa WASD o le frecce per pilotare la nave. Evita i nemici: il contatto fa danno! P mette in pausa.', 'Use WASD or the arrow keys to steer the ship. Avoid enemies: touching them hurts! P pauses.', 'Usa WASD o las flechas para pilotar la nave. ¡Evita a los enemigos: tocarlos hace daño! P pausa.', 'Utilise ZQSD/WASD ou les flèches pour piloter. Évite les ennemis : leur contact fait mal ! P met en pause.', '使用WASD或方向键操控飞船。躲开敌人：碰到会受伤！P暂停。'),
     },
     {
       icon: <Crosshair size={40} />, color: '#f97316',
@@ -39,7 +40,7 @@ export const Tutorial: React.FC<TutorialProps> = ({ lang, touch, onClose }) => {
     {
       icon: <Gift size={40} />, color: '#fbbf24',
       title: L(lang, 'Scrigni ed evoluzioni', 'Chests and evolutions', 'Cofres y evoluciones', 'Coffres et évolutions', '宝箱与进化'),
-      text: L(lang, 'Ogni boss lascia uno scrigno. Un’arma al livello massimo + la sua passiva abbinata si evolve in un’arma leggendaria, come i Siluri Fotonici o i Siluri Protonici!', 'Every boss drops a chest. A max-level weapon + its matching passive evolves into a legendary weapon, like Photon or Proton Torpedoes!', 'Cada jefe suelta un cofre. Un arma a nivel máximo + su pasiva evoluciona en un arma legendaria, ¡como los Torpedos de Fotones o de Protones!', 'Chaque boss lâche un coffre. Une arme au niveau max + son passif associé évolue en arme légendaire, comme les Torpilles à Photons ou à Protons !', '每个Boss都会掉落宝箱。满级武器+对应被动将进化为传奇武器，例如光子鱼雷或质子鱼雷！'),
+      text: L(lang, 'Boss e mini boss lasciano uno scrigno. Un’arma al livello massimo, aprendo lo scrigno, si evolve in un’arma leggendaria, come i Siluri Fotonici o i Siluri Protonici!', 'Bosses and mini bosses drop a chest. Open it with a max-level weapon and it evolves into a legendary weapon, like Photon or Proton Torpedoes!', 'Jefes y minijefes sueltan un cofre. Al abrirlo, un arma a nivel máximo evoluciona en un arma legendaria, ¡como los Torpedos de Fotones o de Protones!', 'Boss et mini-boss lâchent un coffre. En l’ouvrant, une arme au niveau max évolue en arme légendaire, comme les Torpilles à Photons ou à Protons !', 'Boss和小Boss会掉落宝箱。打开宝箱时，满级武器将进化为传奇武器，例如光子鱼雷或质子鱼雷！'),
     },
     {
       icon: <ShoppingCart size={40} />, color: '#38bdf8',

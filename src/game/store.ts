@@ -69,6 +69,10 @@ export interface GlobalHighScore extends HighScore {
 }
 
 export interface GameStore {
+  /** acquisti permanenti gia' consegnati (pacchetto iniziale, x2 permanente): non vanno ridati */
+  iapGranted?: string[];
+  /** velocita' x2 comprata per sempre */
+  speedX2Owned?: boolean;
   coins: number;
   diamonds: number;
   points: number;
@@ -89,6 +93,7 @@ export interface GameStore {
     speedBoostPaused: boolean;
     tutorialDone?: boolean;
     languageChosen?: boolean;
+    theme?: 'auto' | 'light' | 'dark';
   };
   ships: {
     starter: boolean;
@@ -128,7 +133,7 @@ const DEFAULT_STORE: GameStore = {
   diamonds: 5,
   points: 0,
   stats: { maxHp: 100, attack: 10, baseFireRate: 1, shipSpeed: 200, defense: 0, critChance: 0, critDamage: 150, regeneration: 0, luck: 0, expBonus: 0 },
-  upgrades: { maxHp: { level: 0, maxLevel: 200 } },
+  upgrades: { maxHp: { level: 0, maxLevel: 500 } },
   abilityAttackLevels: {},
   ships: { 
     starter: true, 
@@ -171,6 +176,16 @@ export function loadStore(): GameStore {
     const saved = storageGetItem(STORE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
+      // Nave Buco Nero tolta dal gioco: chi l'aveva comprata riceve indietro le monete (una sola volta)
+      if (parsed.ships?.blackhole_ship) {
+        parsed.ships = { ...parsed.ships, blackhole_ship: false };
+        parsed.coins = (parsed.coins || 0) + 2000;
+      }
+      if (parsed.currentShip === 'blackhole_ship') parsed.currentShip = 'starter';
+      // il x2 permanente ora si compra: chi lo aveva sbloccato coi boss torna a x1.5 (o x1)
+      if (parsed.settings?.speedMultiplier === 2 && !(parsed.settings.speedBoostTimer > 0) && !parsed.speedX2Owned) parsed.settings = { ...parsed.settings, speedMultiplier: (parsed.userProfile?.totalBossesDefeated || 0) >= 4 ? 1.5 : 1 };
+      // la salute ora arriva al livello 500 (prima 200)
+      if (parsed.upgrades?.maxHp && (parsed.upgrades.maxHp.maxLevel || 0) < 500) parsed.upgrades = { ...parsed.upgrades, maxHp: { ...parsed.upgrades.maxHp, maxLevel: 500 } };
       return { ...DEFAULT_STORE, ...parsed, stats: { ...DEFAULT_STORE.stats, ...(parsed.stats || {}) }, settings: { ...DEFAULT_STORE.settings, ...(parsed.settings || {}) }, ships: { ...DEFAULT_STORE.ships, ...(parsed.ships || {}) }, upgrades: { ...DEFAULT_STORE.upgrades, ...(parsed.upgrades || {}) } };
     }
   } catch (e) { console.error('Failed to load store:', e); }
@@ -182,8 +197,15 @@ export function saveStore(store: GameStore): void {
   catch (e) { console.error('Failed to save store:', e); }
 }
 
+// Prezzi dei potenziamenti: crescita LINEARE (+15% del prezzo base a ogni livello).
+// Prima crescevano del 40-50% a ogni livello e dopo pochi acquisti costavano decine di migliaia di monete.
+const linearCost = (base: number, level: number) => Math.round(base * (1 + 0.15 * level));
+
+// Salute: +50 monete per livello nei primi 100 livelli, poi +100, +200, +400... (raddoppia ogni 100 livelli)
 export function getUpgradeCost(level: number): number {
-  return Math.floor(150 * Math.pow(1.5, level));
+  let cost = 100;
+  for (let tier = 0; tier * 100 < level; tier++) cost += Math.min(100, level - tier * 100) * 50 * Math.pow(2, tier);
+  return Math.round(cost);
 }
 
 export function applyUpgrade(store: GameStore, stat: keyof typeof store.upgrades): GameStore | null {
@@ -222,38 +244,17 @@ export type DiamondUpgradeType = 'luck' | 'expBonus';
 export type UpgradeType = CoinUpgradeType | DiamondUpgradeType;
 
 export function getCoinUpgradeCost(stat: CoinUpgradeType, currentLevel: number): number {
-  const baseCosts: Record<CoinUpgradeType, number> = { defense: 250, critChance: 200, critDamage: 200, regeneration: 300, shipSpeed: 180 };
-  return Math.floor(baseCosts[stat] * Math.pow(1.4, currentLevel));
+  // DEF ha 100 livelli, gli altri 1000: un livello di DEF costa quanto 10 livelli di probabilita' di critico,
+  // cosi' completare DEF costa come completare il critico (~9,1 milioni di monete in tutto)
+  if (stat === 'defense') return 2010 + 1800 * currentLevel;
+  const baseCosts: Record<CoinUpgradeType, number> = { defense: 0, critChance: 120, critDamage: 120, regeneration: 180, shipSpeed: 100 };
+  return linearCost(baseCosts[stat], currentLevel);
 }
 
 export function getDiamondUpgradeCost(stat: DiamondUpgradeType, currentLevel: number): number {
-  const baseCosts: Record<DiamondUpgradeType, number> = { luck: 20, expBonus: 15 };
-  const baseCost = baseCosts[stat];
-  
-  let additionalCost = 0;
-  
-  if (currentLevel < 10) {
-    additionalCost = currentLevel * 5;
-  } else if (currentLevel < 20) {
-    additionalCost = 50 + (currentLevel - 10) * 10;
-  } else if (currentLevel < 30) {
-    additionalCost = 50 + 100 + (currentLevel - 20) * 20;
-  } else if (currentLevel < 40) {
-    additionalCost = 50 + 100 + 200 + (currentLevel - 30) * 30;
-  } else if (currentLevel < 50) {
-    additionalCost = 50 + 100 + 200 + 300 + (currentLevel - 40) * 40;
-  } else {
-    const decade = Math.floor(currentLevel / 10);
-    const remainder = currentLevel % 10;
-    let total = 0;
-    for (let i = 1; i <= decade; i++) {
-      total += i * 10 * (i === 1 ? 0.5 : 1);
-    }
-    total += remainder * decade * 10;
-    additionalCost = total;
-  }
-  
-  return baseCost + additionalCost;
+  // i diamanti si guadagnano lentamente (boss e mini boss): +2 diamanti a ogni livello
+  const baseCosts: Record<DiamondUpgradeType, number> = { luck: 10, expBonus: 10 };
+  return baseCosts[stat] + currentLevel * (stat === 'expBonus' ? 4 : 2);
 }
 
 export function getStatMaxLevel(stat: UpgradeType): number {

@@ -29,6 +29,8 @@ export const EVOLUTIONS: Partial<Record<AbilityType, AbilityType>> = {
   stellar_blackhole: 'passive_cosmic_dust',
   probe_x: 'passive_galactic_crown',
   probe_y: 'passive_galactic_coin',
+  prism_ray: 'passive_molecular_replicator',
+  arc_slash: 'passive_stellar_candelabrum',
 };
 
 let pid = 0;
@@ -50,15 +52,17 @@ export function rollEnemyDrop(state: GameState, pos: Vector2): void {
 function openChest(state: GameState, upgradeAbility: (a: any) => any, applyPassives: () => void): ChestReward[] {
   const p = state.player;
   const rewards: ChestReward[] = [];
-  // 1) evoluzione, se possibile (prima arma idonea)
-  const owned = new Set(p.abilities.map(a => a.type));
-  const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type] && owned.has(EVOLUTIONS[a.type]!));
+  // 1) evoluzione: la prima arma al livello massimo si evolve (non serve piu' la passiva abbinata)
+  const evo = p.abilities.find(a => !a.type.startsWith('passive_') && !a.evolved && a.level >= a.maxLevel && EVOLUTIONS[a.type]);
   if (evo) {
     evo.evolved = true;
     state.evolutionsDone = (state.evolutionsDone || 0) + 1;
     evo.color = getEvolutionColor(evo.type) || evo.color;
     evo.damage *= 2.2;
     evo.cooldown = Math.max(0.05, evo.cooldown * 0.7);
+    // l'arma evoluta ha i suoi livelli: riparte da 1 e sale fino a 5
+    evo.level = 1;
+    evo.maxLevel = 5;
     rewards.push({ kind: 'evolve', abilityType: evo.type });
   }
   // 2) fino a 3 potenziamenti di abilita' non al massimo

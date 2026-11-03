@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" fill="none">
+  <defs>
+    <linearGradient id="field" x1="18" x2="162" y1="10" y2="170" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#25104b"/>
+      <stop offset="1" stop-color="#07152f"/>
+    </linearGradient>
+    <linearGradient id="ship" x1="57" x2="126" y1="42" y2="139" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#69f3ff"/>
+      <stop offset=".55" stop-color="#6a8bff"/>
+      <stop offset="1" stop-color="#ed73ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="42" fill="url(#field)"/>
+  <circle cx="90" cy="90" r="59" stroke="#8564ff" stroke-opacity=".28" stroke-width="2"/>
+  <path d="M90 29c13 19 30 43 30 65a30 30 0 1 1-60 0c0-22 17-46 30-65Z" fill="url(#ship)" stroke="#d9fbff" stroke-width="3"/>
+  <path d="m90 57 8 31-8 34-8-34 8-31Z" fill="#f4ffff" fill-opacity=".9"/>
+  <path d="M61 100 42 119l33-9M119 100l19 19-33-9" stroke="#73edff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="90" cy="140" r="5" fill="#ffadff"/>
+  <circle cx="42" cy="59" r="3" fill="#fff"/>
+  <circle cx="137" cy="50" r="2" fill="#a9f6ff"/>
+  <circle cx="143" cy="127" r="3" fill="#e1a4ff"/>
+</svg>

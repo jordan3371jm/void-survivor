@@ -2,6 +2,7 @@
 // Documentazione: https://wiki.playgama.com/playgama/bridge-sdk
 
 import { Capacitor } from '@capacitor/core';
+import { isKlyo, klyoSdk } from './klyo';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
@@ -22,6 +23,7 @@ class PlaygamaSDK {
     if (this.initialized) return;
     // Nell'app non c'e' Playgama: le pubblicita' passano da AdMob
     if (isNativeApp()) { import('./nativeAds').then(m => m.initNativeAds()).catch(e => console.warn('[AdMob]', e)); return; }
+    if (isKlyo) { await this.initKlyo(); return; }
 
     let attempts = 0;
     const maxAttempts = 100; // 5 secondi al massimo
@@ -48,6 +50,17 @@ class PlaygamaSDK {
     } catch (error) {
       console.error('[Playgama] Errore inizializzazione:', error);
     }
+  }
+
+  // Klyo Games: il kit (klyo-gry-sdk.js) e' il primo script della pagina, qui lo si attende soltanto
+  private klyo: any = null;
+  private async initKlyo(): Promise<void> {
+    for (let i = 0; i < 100 && !klyoSdk(); i++) await new Promise(resolve => setTimeout(resolve, 50));
+    this.klyo = klyoSdk();
+    if (!this.klyo) { console.warn('[Klyo] kit non trovato'); return; }
+    this.initialized = true;
+    // la pagina di Klyo puo' chiedere il silenzio (finestra piccola)
+    try { this.klyo.onSound?.((on: boolean) => this.audioListeners.forEach(cb => cb(on !== false))); } catch { /* ignora */ }
   }
 
   // Eventi della piattaforma: pausa (tab in background, pubblicita', ecc.) e audio on/off.
@@ -80,11 +93,13 @@ class PlaygamaSDK {
   }
 
   isInitialized(): boolean {
-    return this.initialized && !!this.bridge;
+    return this.initialized && (!!this.bridge || !!this.klyo);
   }
 
   /** Lingua del giocatore indicata dalla piattaforma (es. 'it', 'en'), se disponibile. */
   getLanguage(): string | null {
+    // Su Klyo la lingua e' quella del dispositivo del giocatore
+    if (this.klyo) { try { return (navigator.language || '').slice(0, 2).toLowerCase() || null; } catch { return null; } }
     try {
       const l = this.bridge?.platform?.language;
       return typeof l === 'string' && l ? l.slice(0, 2).toLowerCase() : null;
@@ -93,6 +108,10 @@ class PlaygamaSDK {
 
   sendGameReady(): void {
     if (!this.isInitialized()) return;
+    if (this.klyo) {
+      try { this.klyo.ready(); } catch (error) { console.error('[Klyo] Errore ready:', error); }
+      return;
+    }
 
     try {
       this.bridge.platform.sendMessage('game_ready');
@@ -101,8 +120,19 @@ class PlaygamaSDK {
     }
   }
 
+  /** Klyo: il campo di gioco (esiste solo durante la partita) per il pulsante "registra una clip" della pagina */
+  registerCanvas(canvas: HTMLCanvasElement): void {
+    if (!this.klyo?.canvas) return;
+    try { this.klyo.canvas(canvas); } catch (error) { console.warn('[Klyo] canvas:', error); }
+  }
+
   async showInterstitial(placement: string = 'game_over'): Promise<void> {
     if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeInterstitial(); }
+    if (this.klyo) {
+      // pausa pubblicitaria scelta dal gioco: Klyo decide se e cosa mostrare
+      if (!this.klyo.adBreak) return;
+      return new Promise<void>((resolve) => { try { this.klyo.adBreak('after-loss', () => resolve()); } catch { resolve(); } });
+    }
     if (!this.isInitialized() || !this.bridge.advertisement) return;
 
     try {
@@ -115,6 +145,7 @@ class PlaygamaSDK {
 
   async showRewarded(placement: string = 'extra_life'): Promise<boolean> {
     if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeRewarded(); }
+    if (this.klyo) return false;
     if (!this.isInitialized() || !this.bridge.advertisement) return false;
 
     return new Promise((resolve) => {
@@ -171,12 +202,95 @@ class PlaygamaSDK {
 
   isInterstitialSupported(): boolean {
     if (isNativeApp()) return true;
+    if (this.klyo) return !!this.klyo.adBreak;
     return this.isInitialized() && !!this.bridge.advertisement?.isInterstitialSupported;
   }
 
   isRewardedSupported(): boolean {
     if (isNativeApp()) return true;
+    // Su Klyo la pubblicita' con premio non e' ancora attiva: nessun pulsante "guarda la pubblicita'"
+    if (this.klyo) return false;
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
+  }
+
+  // Acquisti con soldi veri (Bridge payments): solo dove la piattaforma li supporta
+  paymentsSupported(): boolean {
+    return this.isInitialized() && !isKlyo && !!this.bridge?.payments?.isSupported;
+  }
+  async getCatalog(): Promise<Record<string, string>> {
+    if (!this.paymentsSupported()) return {};
+    try {
+      const items: any[] = await this.bridge.payments.getCatalog();
+      const out: Record<string, string> = {};
+      for (const it of items || []) if (it?.id) out[it.id] = String(it.price ?? (it.priceValue != null ? `${it.priceValue} ${it.priceCurrencyCode || ''}` : ''));
+      return out;
+    } catch (e) { console.warn('[Playgama] catalogo', e); return {}; }
+  }
+  async getPurchases(): Promise<string[]> {
+    if (!this.paymentsSupported()) return [];
+    try { const list: any[] = await this.bridge.payments.getPurchases(); return (list || []).map(p => p?.id || p?.productId).filter(Boolean); }
+    catch (e) { console.warn('[Playgama] acquisti', e); return []; }
+  }
+  /** Segna come usato un acquisto consumabile (monete, diamanti) dopo averlo consegnato. */
+  async consumePurchase(id: string): Promise<void> {
+    if (!this.paymentsSupported()) return;
+    try { await this.bridge.payments.consumePurchase(id); } catch (e) { console.warn('[Playgama] consumo', e); }
+  }
+  /** Avvia l'acquisto: true solo se il pagamento e' andato a buon fine. */
+  async purchase(id: string): Promise<boolean> {
+    if (!this.paymentsSupported()) return false;
+    try { const r = await this.bridge.payments.purchase(id); return !!r; }
+    catch (e) { console.warn('[Playgama] acquisto annullato', e); return false; }
+  }
+
+  // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:
+  // - computer (qualsiasi finestra): 4 banner, sopra, sotto, a sinistra e a destra, con il gioco in mezzo
+  // - tutto il resto (telefoni, tablet, finestre piccole, altre schermate): una striscia in basso,
+  //   e il gioco si restringe sopra (variabile CSS --ad-bottom), cosi' nessun pulsante finisce sotto.
+  // Le soglie qui devono restare uguali alle chiavi di public/playgama-bridge-config.json.
+  private bannerWanted: 'menu' | 'gameplay' | 'pages' | null = null;
+  private bannerShown: string | null = null;
+  private bannerReserve = '';
+  private bannerResizeHooked = false;
+  setSideBanners(placement: 'menu' | 'gameplay' | 'pages' | null): void {
+    this.bannerWanted = placement;
+    if (!this.bannerResizeHooked && typeof window !== 'undefined') {
+      this.bannerResizeHooked = true;
+      let tm: any = null;
+      window.addEventListener('resize', () => { clearTimeout(tm); tm = setTimeout(() => this.applySideBanners(), 300); });
+    }
+    if (this.isInitialized()) this.applySideBanners();
+    else this.initialize().then(() => this.applySideBanners()).catch(() => {});
+  }
+  private applySideBanners(): void {
+    const ad = this.isInitialized() ? this.bridge?.advertisement : null;
+    if (!ad || !ad.isAdvancedBannersSupported) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    const device: string = this.bridge.device?.type || 'desktop';
+    const landscape = w > h;
+    const target = this.bannerWanted;
+    // spazio riservato ai banner (% della finestra): il gioco sta in mezzo e nessun banner copre niente
+    let top = 0, bottom = 0, side = 0;
+    if (target) {
+      if (device === 'desktop') { top = 7; bottom = 7; side = 10; } // ogni computer: 4 banner (sopra, sotto, sinistra, destra)
+      else bottom = device === 'mobile' ? (landscape ? 14 : 8) : device === 'tablet' ? (landscape ? 8 : 6) : 8;
+    }
+    const pxH = (v: number) => v ? Math.round(h * v / 100) + 'px' : '0px';
+    const pxW = (v: number) => v ? Math.round(w * v / 100) + 'px' : '0px';
+    const key = [pxH(top), pxH(bottom), pxW(side)].join('|');
+    if (target === this.bannerShown && key === this.bannerReserve) return;
+    try {
+      if (target) ad.showAdvancedBanners(target); else ad.hideAdvancedBanners();
+      this.bannerShown = target;
+    } catch (e) { console.warn('[Playgama] banner', e); top = 0; bottom = 0; side = 0; }
+    const finalKey = [pxH(top), pxH(bottom), pxW(side)].join('|');
+    if (finalKey !== this.bannerReserve) {
+      this.bannerReserve = finalKey;
+      const st = document.documentElement.style;
+      st.setProperty('--ad-top', pxH(top)); st.setProperty('--ad-bottom', pxH(bottom));
+      st.setProperty('--ad-left', pxW(side)); st.setProperty('--ad-right', pxW(side));
+      window.dispatchEvent(new Event('resize')); // il canvas ricalcola la sua dimensione
+    }
   }
 
 

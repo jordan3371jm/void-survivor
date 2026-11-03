@@ -5,14 +5,17 @@ import { getEvolutionName } from './game/evolutions';
 import { getAbilityInfo } from './game/abilityInfo';
 import { resumeAudio, setSfxVolume, setMusicVolume, loadCustomMusic, hasCustomMusic, startBackgroundMusic, stopBackgroundMusic, setAudioPaused } from './game/audio';
 import { t, Language, languageNames } from './game/i18n';
+import { plFromEn } from './game/pl';
 import { loadStore, saveStore, applyUpgrade, getUpgradeCost, GameStore, upgradeAbilityAttack, getAbilityAttackBonus, applyDiamondUpgrade, getDiamondUpgradeCost, applyCoinUpgrade, getCoinUpgradeCost, getStatLevel, getStatMaxLevel, DiamondUpgradeType, CoinUpgradeType, addHighScore, createUserProfile, saveUserProfile } from './game/store';
+import { STORAGE_LATE_EVENT } from './game/storage';
 import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
+import { getLoginRewardsState, hasUnclaimedReward } from './game/loginRewards';
 import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
-import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
@@ -24,7 +27,7 @@ const DailyEventsModal = React.lazy(() => import('./DailyEventsModal').then((mod
 const ASSET_BASE_URL: string = import.meta.env.BASE_URL || '/';
 const BOSS_ICON_LIST = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
 
-type Screen = 'home' | 'upgrades' | 'ships' | 'settings' | 'playing';
+type Screen = 'home' | 'upgrades' | 'ships' | 'settings' | 'playing' | 'shop';
 type GameMode = 'normal' | 'endless' | 'boss_rush';
 
 interface FinalStats {
@@ -32,41 +35,97 @@ interface FinalStats {
   coins: number; diamonds: number; points: number; victory: boolean;
 }
 
-const SHIPS = [
+// Dalla nave piu' debole alla piu' forte (in base all'arma di partenza), prezzo crescente.
+// La nave Buco Nero e' stata tolta (store.ts rimborsa chi l'aveva comprata).
+// iap: astronavi in vendita con soldi veri (Playgama payments). Dove i pagamenti non ci sono restano acquistabili con le monete.
+const SHIPS: { type: string; nameKey: string; price: number; color: string; ability: string; iap?: string }[] = [
   { type: 'starter', nameKey: 'ship_starter', price: 0, color: '#62f5cf', ability: 'homing_laser' },
-  { type: 'fire_ship', nameKey: 'ship_fire', price: 1000, color: '#ff6a2b', ability: 'plasma_flamethrower' },
-  { type: 'laser_ship', nameKey: 'ship_laser', price: 1000, color: '#ff4d5e', ability: 'laser_swords' },
-  { type: 'electric_ship', nameKey: 'ship_electric', price: 1000, color: '#7cc4ff', ability: 'ion_storm' },
-  { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 1000, color: '#5cff8a', ability: 'antimatter_bomb' },
-  { type: 'shadow_ship', nameKey: 'ship_shadow', price: 1000, color: '#9f8cff', ability: 'gravity_field' },
-  { type: 'mechanical_ship', nameKey: 'ship_mechanical', price: 1000, color: '#c9d2e3', ability: 'orbiting_satellites' },
-  { type: 'bio_ship', nameKey: 'ship_bio', price: 1000, color: '#ff5f8f', ability: 'corrosive_nebula' },
-  { type: 'photon_ship', nameKey: 'ship_photon', price: 1500, color: '#ff5555', ability: 'photon_gun' },
-  { type: 'ion_ship', nameKey: 'ship_ion', price: 1500, color: '#6b7bff', ability: 'ion_gun' },
-  { type: 'drone_ship', nameKey: 'ship_drone', price: 1500, color: '#ffb02e', ability: 'drone_swarm' },
-  { type: 'gravity_ship', nameKey: 'ship_gravity', price: 1500, color: '#c05bff', ability: 'gravity_waves' },
-  { type: 'void_ship', nameKey: 'ship_void', price: 1500, color: '#e35bff', ability: 'void_lance' },
-  { type: 'cryo_ship', nameKey: 'ship_cryo', price: 1500, color: '#4ff0ff', ability: 'cryo_lance' },
-  { type: 'shield_ship', nameKey: 'ship_shield', price: 1500, color: '#3dffaa', ability: 'energy_shield' },
-  { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1500, color: '#d19a66', ability: 'asteroid_fragment' },
-  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 1500, color: '#ff9a2e', ability: 'kinetic_darts' },
-  { type: 'meteor_ship', nameKey: 'ship_meteor', price: 1500, color: '#ff7a33', ability: 'meteor' },
-  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 1500, color: '#aab4ff', ability: 'neutronium_boomerang' },
-  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 1500, color: '#5cffff', ability: 'quantum_bounce' },
-  { type: 'blackhole_ship', nameKey: 'ship_blackhole', price: 2000, color: '#b18cff', ability: 'stellar_blackhole' },
-  { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 1500, color: '#ff4444', ability: 'probe_x' },
+  { type: 'shield_ship', nameKey: 'ship_shield', price: 150, color: '#3dffaa', ability: 'energy_shield' },
+  { type: 'cryo_ship', nameKey: 'ship_cryo', price: 250, color: '#4ff0ff', ability: 'cryo_lance' },
+  { type: 'mechanical_ship', nameKey: 'ship_mechanical', price: 350, color: '#c9d2e3', ability: 'orbiting_satellites' },
+  { type: 'bio_ship', nameKey: 'ship_bio', price: 450, color: '#ff5f8f', ability: 'corrosive_nebula' },
+  { type: 'photon_ship', nameKey: 'ship_photon', price: 600, color: '#ff5555', ability: 'photon_gun' },
+  { type: 'ion_ship', nameKey: 'ship_ion', price: 750, color: '#6b7bff', ability: 'ion_gun' },
+  { type: 'drone_ship', nameKey: 'ship_drone', price: 900, color: '#ffb02e', ability: 'drone_swarm' },
+  { type: 'gravity_ship', nameKey: 'ship_gravity', price: 1100, color: '#c05bff', ability: 'gravity_waves' },
+  { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 1300, color: '#ff4444', ability: 'probe_x' },
   { type: 'probe_y_ship', nameKey: 'ship_probe_y', price: 1500, color: '#4f6bff', ability: 'probe_y' },
-  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 1800, color: '#a3acc2', ability: 'kinetic_darts' },
-  { type: 'viper_ship', nameKey: 'ship_viper', price: 1800, color: '#c0c8d8', ability: 'quantum_bounce' },
-  { type: 'federation_ship', nameKey: 'ship_federation', price: 1800, color: '#e6ecf5', ability: 'energy_shield' },
+  { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1750, color: '#d19a66', ability: 'asteroid_fragment' },
+  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 2000, color: '#5cffff', ability: 'quantum_bounce', iap: 'ship_quantum' },
+  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2300, color: '#aab4ff', ability: 'neutronium_boomerang', iap: 'ship_boomerang' },
+  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2600, color: '#ff9a2e', ability: 'kinetic_darts', iap: 'ship_kinetic' },
+  { type: 'electric_ship', nameKey: 'ship_electric', price: 3000, color: '#7cc4ff', ability: 'ion_storm' },
+  { type: 'meteor_ship', nameKey: 'ship_meteor', price: 3400, color: '#ff7a33', ability: 'meteor' },
+  { type: 'fire_ship', nameKey: 'ship_fire', price: 3900, color: '#ff6a2b', ability: 'plasma_flamethrower' },
+  { type: 'viper_ship', nameKey: 'ship_viper', price: 4400, color: '#c0c8d8', ability: 'prism_ray', iap: 'ship_viper' },
+  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 5000, color: '#a3acc2', ability: 'arc_slash', iap: 'ship_tie_fighter' },
+  { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 5700, color: '#5cff8a', ability: 'antimatter_bomb' },
+  { type: 'shadow_ship', nameKey: 'ship_shadow', price: 6500, color: '#9f8cff', ability: 'gravity_field' },
+  { type: 'federation_ship', nameKey: 'ship_federation', price: 7400, color: '#e6ecf5', ability: 'void_lance', iap: 'ship_federation' },
+  { type: 'laser_ship', nameKey: 'ship_laser', price: 8500, color: '#ff4d5e', ability: 'laser_swords', iap: 'ship_laser' },
+  { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole', iap: 'ship_void' },
 ];
 
-const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y'];
+// Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
+// Pacchetti a pagamento del negozio (Playgama payments). consumable: si possono ricomprare.
+type Pack = { id: string; coins: number; diamonds: number; consumable: boolean; ship?: string; speed?: boolean };
+const PACKS: Pack[] = [
+  { id: 'coins_small', coins: 50000, diamonds: 0, consumable: true },
+  { id: 'coins_medium', coins: 300000, diamonds: 0, consumable: true },
+  { id: 'coins_large', coins: 1500000, diamonds: 0, consumable: true },
+  { id: 'coins_huge', coins: 5000000, diamonds: 0, consumable: true },
+  { id: 'diamonds_small', coins: 0, diamonds: 50, consumable: true },
+  { id: 'diamonds_medium', coins: 0, diamonds: 250, consumable: true },
+  { id: 'diamonds_large', coins: 0, diamonds: 600, consumable: true },
+  { id: 'diamonds_huge', coins: 0, diamonds: 1500, consumable: true },
+  { id: 'starter_pack', coins: 100000, diamonds: 100, consumable: false, ship: 'void_ship' },
+  { id: 'mega_pack', coins: 1000000, diamonds: 1000, consumable: true },
+  { id: 'speed_x2', coins: 0, diamonds: 0, consumable: false, speed: true },
+];
+/** Consegna il contenuto di un pacchetto. I pacchetti permanenti si consegnano una sola volta. */
+function grantPack(cur: GameStore, pack: Pack): GameStore {
+  const granted = cur.iapGranted || [];
+  if (!pack.consumable && granted.includes(pack.id)) {
+    // gia' consegnato: ripristina solo cio' che e' permanente (nave, x2)
+    return { ...cur, ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships, speedX2Owned: cur.speedX2Owned || !!pack.speed };
+  }
+  return {
+    ...cur,
+    coins: cur.coins + pack.coins, diamonds: cur.diamonds + pack.diamonds,
+    ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships,
+    speedX2Owned: cur.speedX2Owned || !!pack.speed,
+    iapGranted: pack.consumable ? granted : [...granted, pack.id],
+  };
+}
+
+// Premi del negozio guardando una pubblicita' con premio (senza limite)
+const AD_REWARDS = [{ id: 'shop_coins', coins: 500, diamonds: 0 }, { id: 'shop_diamonds', coins: 0, diamonds: 5 }];
+// 300 monete per diamante nel cambio piu' piccolo, fino a 500 nel piu' grande (1000 diamanti = 500.000 monete)
+const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 3000 }, { diamonds: 50, coins: 17500 }, { diamonds: 100, coins: 40000 }, { diamonds: 250, coins: 105000 }, { diamonds: 500, coins: 225000 }, { diamonds: 1000, coins: 500000 }];
+
+const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
 const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
 
 /** Testi brevi non presenti nel file delle traduzioni. */
 function L(lang: Language, it: string, en: string, es: string, fr: string, zh: string): string {
-  return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : en;
+  return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : lang === 'pl' ? plFromEn(en) : en;
+}
+
+function packTitle(lang: Language, id: string): string {
+  const T: Record<string, [string, string, string, string, string]> = {
+    coins_small: ['Monete piccolo', 'Small coins', 'Monedas pequeño', 'Petit lot de pièces', '小金币包'],
+    coins_medium: ['Monete medio', 'Medium coins', 'Monedas mediano', 'Lot moyen de pièces', '中金币包'],
+    coins_large: ['Monete grande', 'Large coins', 'Monedas grande', 'Grand lot de pièces', '大金币包'],
+    coins_huge: ['Monete gigante', 'Huge coins', 'Monedas gigante', 'Lot géant de pièces', '巨型金币包'],
+    diamonds_small: ['Diamanti piccolo', 'Small diamonds', 'Diamantes pequeño', 'Petit lot de diamants', '小钻石包'],
+    diamonds_medium: ['Diamanti medio', 'Medium diamonds', 'Diamantes mediano', 'Lot moyen de diamants', '中钻石包'],
+    diamonds_large: ['Diamanti grande', 'Large diamonds', 'Diamantes grande', 'Grand lot de diamants', '大钻石包'],
+    diamonds_huge: ['Diamanti enorme', 'Huge diamonds', 'Diamantes enorme', 'Lot énorme de diamants', '巨型钻石包'],
+    starter_pack: ['Pacchetto iniziale', 'Starter pack', 'Paquete inicial', 'Pack de départ', '新手礼包'],
+    mega_pack: ['Mega pacchetto', 'Mega pack', 'Mega paquete', 'Méga pack', '超级礼包'],
+    speed_x2: ['Velocità x2 per sempre', 'Permanent x2 speed', 'Velocidad x2 para siempre', 'Vitesse x2 pour toujours', '永久x2速度'],
+  };
+  const v = T[id]; return v ? L(lang, ...v) : id;
 }
 
 /** Rimuove emoji iniziali/finali dalle traduzioni (al loro posto usiamo icone coerenti). */
@@ -123,6 +182,9 @@ export default function App() {
   const lastModeRef = useRef<GameMode>('normal');
 
   const [screen, setScreen] = useState<Screen>('home');
+  // prezzi del negozio (dal catalogo della piattaforma); null = pagamenti non disponibili
+  const [iapPrices, setIapPrices] = useState<Record<string, string> | null>(null);
+  const [iapBusy, setIapBusy] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [levelUpPending, setLevelUpPending] = useState(false);
   const [levelUpChoices, setLevelUpChoices] = useState<LevelUpChoice[]>([]);
@@ -172,6 +234,24 @@ export default function App() {
   // solo in sviluppo: accesso allo stato della partita per i test automatici
   if (import.meta.env.DEV) (window as any).__vsGame = gameStateRef;
 
+  // Salvataggi arrivati dopo l'avvio (piattaforma lenta): si ricaricano i progressi veri al posto di quelli di default
+  useEffect(() => {
+    const onLate = () => { const s = loadStore(); storeRef.current = s; setStore(s); };
+    window.addEventListener(STORAGE_LATE_EVENT, onLate);
+    return () => window.removeEventListener(STORAGE_LATE_EVENT, onLate);
+  }, []);
+
+  // Tema chiaro/scuro: attributo su <html> (il CSS fa il resto; "auto" segue il dispositivo)
+  const theme = store.settings.theme || 'dark';
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  // Banner su tutte le schermate (ai lati su computer larghi, striscia in basso altrove: vedi playgame.ts)
+  useEffect(() => {
+    playgama.setSideBanners(screen === 'home' ? 'menu' : screen === 'playing' ? 'gameplay' : 'pages');
+  }, [screen]);
+
   useEffect(() => {
     setSfxVolume(store.settings.sfxVolume);
     setMusicVolume(store.settings.musicVolume);
@@ -193,6 +273,21 @@ export default function App() {
           commitStore({ ...cur, settings: { ...cur.settings, language: pl as Language } });
         }
         playgama.sendGameReady();
+        // Negozio: prezzi dal catalogo e ripristino delle astronavi gia' comprate (checklist 2.4.5 / 2.4.6)
+        if (playgama.paymentsSupported()) {
+          playgama.getCatalog().then(c => setIapPrices(c)).catch(() => setIapPrices({}));
+          playgama.getPurchases().then(ids => {
+            const owned = SHIPS.filter(sh => sh.iap && ids.includes(sh.iap));
+            let cur = storeRef.current;
+            const missing = owned.filter(sh => !(cur.ships as any)[sh.type]);
+            if (missing.length) cur = { ...cur, ships: { ...cur.ships, ...Object.fromEntries(missing.map(sh => [sh.type, true])) } };
+            // pacchetti: permanenti ripristinati, consumabili pagati ma non consegnati (gioco chiuso durante l'acquisto) consegnati e consumati
+            const packs = PACKS.filter(pk => ids.includes(pk.id));
+            for (const pk of packs) cur = grantPack(cur, pk);
+            if (missing.length || packs.length) commitStore(cur);
+            for (const pk of packs) if (pk.consumable) void playgama.consumePurchase(pk.id);
+          }).catch(() => {});
+        }
       }
     }).catch((error: any) => {
       console.error('[App] Playgama SDK non disponibile:', error);
@@ -300,7 +395,7 @@ export default function App() {
       const current = storeRef.current;
       const newTimer = Math.max(0, current.settings.speedBoostTimer - 1);
       let newStore: GameStore = newTimer <= 0
-        ? { ...current, settings: { ...current.settings, speedMultiplier: 1.0, speedBoostTimer: 0, speedBoostPaused: false } }
+        ? { ...current, settings: { ...current.settings, speedMultiplier: current.speedX2Owned ? 2.0 : 1.0, speedBoostTimer: 0, speedBoostPaused: false } }
         : { ...current, settings: { ...current.settings, speedBoostTimer: newTimer } };
       // Controlla gli obiettivi ogni 10 secondi
       if (newTimer % 10 === 0 && newStore.userProfile) {
@@ -421,13 +516,18 @@ export default function App() {
       .catch((err: any) => console.error('[App] Errore salvataggio punteggio globale:', err));
   }, [commitStore]);
 
+  // Modalita' leggera automatica: se durante la partita gli fps restano sotto 42 per 6 secondi,
+  // niente bagliori, meno particelle e risoluzione piu' bassa (per il resto della sessione)
+  const lowFxRef = useRef(false);
+  const perfRef = useRef({ acc: 0, n: 0, slow: 0 });
+
   const resizeCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const w = canvas.clientWidth || window.innerWidth || 800;
     const h = canvas.clientHeight || window.innerHeight || 600;
     // Nitido sugli schermi ad alta densita', ma con un tetto di pixel per non rallentare i telefoni
-    const maxDpr = Math.sqrt(2_400_000 / Math.max(1, w * h));
+    const maxDpr = Math.sqrt((lowFxRef.current ? 1_000_000 : 2_400_000) / Math.max(1, w * h));
     const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, maxDpr));
     const bw = Math.round(w * dpr), bh = Math.round(h * dpr);
     if (canvas.width !== bw) canvas.width = bw;
@@ -453,6 +553,14 @@ export default function App() {
         state.speedMultiplier = settings.speedMultiplier || 1;
         const active = !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
         if (active) { engine.updateGame(state, dt); trackFrame(state); }
+        if (active && !lowFxRef.current && rawMs > 0 && rawMs < 250) {
+          const pf = perfRef.current; pf.acc += rawMs; pf.n++;
+          if (pf.acc >= 3000) {
+            pf.slow = pf.n * 1000 / pf.acc < 42 ? pf.slow + 1 : 0; pf.acc = 0; pf.n = 0;
+            if (pf.slow >= 2) { lowFxRef.current = true; resizeCanvas(); }
+          }
+        }
+        (state as any).lowFx = lowFxRef.current;
         trackPerfFrame(rawMs, active);
 
         if (state.chestPending && !chestShownRef.current) {
@@ -713,7 +821,8 @@ export default function App() {
       if (!rewarded) return;
       const current = storeRef.current;
       const watched = current.settings.adsWatchedForSpeed + 1;
-      if (watched >= 5) {
+      // basta una pubblicita' per il x2 (prima ne servivano 5)
+      if (watched >= 1) {
         const newTimer = Math.min((current.settings.speedBoostTimer || 0) + 600, 86400); // +10 minuti, max 24 ore
         commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostTimer: newTimer, speedBoostPaused: false, adsWatchedForSpeed: 0 } });
       } else {
@@ -748,6 +857,7 @@ export default function App() {
   useEffect(() => {
     if (screen !== 'playing') return undefined;
     const canvas = canvasRef.current;
+    if (canvas) playgama.registerCanvas(canvas);
     const MOVE_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ']);
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -755,7 +865,7 @@ export default function App() {
       if (!state) return;
       const key = e.key.toLowerCase();
       if (MOVE_KEYS.has(key)) e.preventDefault();
-      if (!e.repeat && (e.key === 'Escape' || key === 'p')) { togglePause(); return; }
+      if (!e.repeat && key === 'p') { togglePause(); return; }
       if (state.chestPending && !e.repeat && (key === 'enter' || key === ' ')) { closeChest(); return; }
       if (state.levelUpPending && !e.repeat && key === 'r') { handleReroll(); return; }
       if (state.levelUpPending && !e.repeat && ['1', '2', '3'].includes(key)) {
@@ -917,7 +1027,7 @@ export default function App() {
                 ) : (
                   <span className="vs-mode-progress">
                     <span className="vs-mode-progress-label">
-                      {L(lang, `Sblocca all'ondata ${m.need}`, `Unlock at wave ${m.need}`, `Desbloquear en la oleada ${m.need}`, `Débloquer à la vague ${m.need}`, `第${m.need}波解锁`)}
+                      {lang === 'pl' ? `Odblokuj na fali ${m.need}` : L(lang, `Sblocca all'ondata ${m.need}`, `Unlock at wave ${m.need}`, `Desbloquear en la oleada ${m.need}`, `Débloquer à la vague ${m.need}`, `第${m.need}波解锁`)}
                       <b>{Math.min(maxWaveReached, m.need)}/{m.need}</b>
                     </span>
                     <span className="vs-progress"><span style={{ width: `${Math.min(100, (maxWaveReached / m.need) * 100)}%` }} /></span>
@@ -948,12 +1058,15 @@ export default function App() {
   // ---------------------------------------------------------------------------
   if (screen === 'home') {
     const missionsClaimable = countClaimable();
+    // pallino sul regalo finche' la ricompensa di oggi non e' stata presa
+    let dailyReady = false; try { dailyReady = hasUnclaimedReward(getLoginRewardsState()); } catch { /* ignora */ }
     const unclaimedAchievements = store.userProfile?.completedAchievements?.filter(c => !c.claimed).length || 0;
     const currentShipInfo = SHIPS.find(s => s.type === store.currentShip) || SHIPS[0];
     const boostActive = store.settings.speedMultiplier === 2 && store.settings.speedBoostTimer > 0 && !store.settings.speedBoostPaused;
     const boostPaused = store.settings.speedBoostPaused && store.settings.speedBoostTimer > 0;
     const dock = [
-      { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold' },
+      { key: 'shop', label: clean(t(lang, 'shop')), icon: <ShoppingBag size={20} />, onClick: () => goTo('shop'), tone: 'violet' },
+      { key: 'daily', label: clean(t(lang, 'daily_reward')), icon: <Gift size={20} />, onClick: () => setShowDailyRewardModal(true), tone: 'gold', badge: dailyReady ? 1 : 0 },
       { key: 'events', label: clean(t(lang, 'daily_events')), icon: <CalendarDays size={20} />, onClick: () => setShowDailyEventsModal(true), tone: 'green', badge: missionsClaimable },
       { key: 'achievements', label: clean(t(lang, 'achievements')), icon: <Target size={20} />, onClick: () => setShowAchievementsModal(true), tone: 'orange', badge: unclaimedAchievements },
       { key: 'speed', label: clean(t(lang, 'speed_select')), icon: <Zap size={20} />, onClick: () => setShowSpeedModal(true), tone: 'cyan' },
@@ -1037,8 +1150,9 @@ export default function App() {
           const bosses = store.userProfile?.totalBossesDefeated || 0;
           const speedOptions = [
             { value: 1, label: clean(t(lang, 'speed_normal')), unlocked: true, note: '' },
-            { value: 1.5, label: clean(t(lang, 'speed_fast')), unlocked: bosses >= 1, note: t(lang, 'speed_requirement_boss1') },
-            { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: bosses >= 5, note: t(lang, 'speed_requirement_boss5') },
+            // x1.5: sconfiggendo il 4o boss. x2: con una pubblicita' (10 minuti) o comprato per sempre nel negozio
+            { value: 1.5, label: clean(t(lang, 'speed_fast')), unlocked: bosses >= 4, note: L(lang, 'Sconfiggi il quarto boss per sbloccare x1.5', 'Defeat the fourth boss to unlock x1.5', 'Derrota al cuarto jefe para desbloquear x1.5', 'Bats le quatrième boss pour débloquer x1.5', '击败第四个Boss解锁x1.5') },
+            { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: !!store.speedX2Owned || store.settings.speedBoostTimer > 0, note: t(lang, 'speed_requirement_ads') },
           ];
           return (
             <div className="vs-modal-backdrop" onClick={() => setShowSpeedModal(false)}>
@@ -1064,8 +1178,7 @@ export default function App() {
                       onClick={() => {
                         const current = storeRef.current;
                         if (o.value === 2) {
-                          const newTimer = Math.min((current.settings.speedBoostTimer || 0) + 600, 86400);
-                          commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostTimer: newTimer, speedBoostPaused: false } });
+                          commitStore({ ...current, settings: { ...current.settings, speedMultiplier: 2.0, speedBoostPaused: false } });
                         } else {
                           commitStore({ ...current, settings: { ...current.settings, speedMultiplier: o.value, speedBoostTimer: 0, speedBoostPaused: false } });
                         }
@@ -1073,17 +1186,21 @@ export default function App() {
                     >
                       <span className="vs-option-main">{o.unlocked ? (store.settings.speedMultiplier === o.value ? <Check size={18} /> : <Zap size={18} />) : <Lock size={18} />}{o.label}</span>
                       {!o.unlocked && <span className="vs-option-note">{o.note}</span>}
-                      {o.unlocked && o.value === 2 && <span className="vs-option-note">{clean(t(lang, 'speed_permanent_unlock'))} (+10 min)</span>}
+                      {o.unlocked && o.value === 2 && <span className="vs-option-note">{store.speedX2Owned ? clean(t(lang, 'speed_permanent_unlock')) : formatTime(store.settings.speedBoostTimer)}</span>}
                     </button>
                   ))}
                 </div>
-                {bosses < 5 && (
+                {!store.speedX2Owned && (
                   <div className="vs-panel vs-panel--inset vs-center">
                     <span>{t(lang, 'speed_requirement_ads')}</span>
-                    <span className="vs-progress vs-progress--wide"><span style={{ width: `${(store.settings.adsWatchedForSpeed / 5) * 100}%` }} /></span>
                     <button type="button" className="vs-btn vs-btn--gold" onClick={watchSpeedAd}>
-                      <Clapperboard size={18} />{clean(t(lang, 'speed_activate_ads'))} ({store.settings.adsWatchedForSpeed}/5)
+                      <Clapperboard size={18} />{clean(t(lang, 'speed_activate_ads'))}
                     </button>
+                    {iapPrices && (
+                      <button type="button" className="vs-btn vs-btn--primary" onClick={() => { setShowSpeedModal(false); goTo('shop'); }}>
+                        <ShoppingBag size={18} />{L(lang, 'x2 per sempre nel negozio', 'x2 forever in the shop', 'x2 para siempre en la tienda', 'x2 pour toujours dans la boutique', '商店永久x2')}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1156,7 +1273,7 @@ export default function App() {
                 {coinUpgrades.map(u => {
                   const value = u.type === 'maxHp' ? (store.stats.maxHp || 100) : (store.stats[u.type] || 0);
                   const level = u.type === 'maxHp' ? (store.upgrades.maxHp?.level || 0) : getStatLevel(u.type as CoinUpgradeType, value);
-                  const maxLevel = u.type === 'maxHp' ? (store.upgrades.maxHp?.maxLevel || 200) : getStatMaxLevel(u.type as CoinUpgradeType);
+                  const maxLevel = u.type === 'maxHp' ? (store.upgrades.maxHp?.maxLevel || 500) : getStatMaxLevel(u.type as CoinUpgradeType);
                   const cost = u.type === 'maxHp' ? getUpgradeCost(level) : getCoinUpgradeCost(u.type as CoinUpgradeType, level);
                   return <React.Fragment key={u.type}>{renderStatCard(u, value, level, maxLevel, cost, 'coin', () => {
                     const ns = u.type === 'maxHp' ? applyUpgrade(storeRef.current, 'maxHp') : applyCoinUpgrade(storeRef.current, u.type as CoinUpgradeType);
@@ -1179,28 +1296,28 @@ export default function App() {
           )}
 
           {upgradeTab === 'active' && (
+            <>
+            <div className="vs-panel vs-panel--soon">
+              <strong>{clean(t(lang, 'coming_soon'))}</strong>
+              <span className="vs-muted">{L(lang, 'Potenziamenti delle abilità attive in arrivo!', 'Active ability upgrades coming soon!', '¡Mejoras de habilidades activas muy pronto!', 'Améliorations des capacités actives bientôt !', '主动技能升级即将推出!')}</span>
+            </div>
             <div className="vs-grid vs-grid--abilities">
               {ACTIVE_ABILITIES.map(type => {
                 const info = getAbilityInfo(type);
-                const atkLvl = getAbilityAttackBonus(store, type);
-                const canAfford = store.coins >= 100;
                 return (
-                  <div key={type} className="vs-card vs-ability-card" style={{ ['--accent' as any]: info.color }}>
+                  <div key={type} className="vs-card vs-ability-card is-info" style={{ ['--accent' as any]: info.color }}>
                     <AbilityIcon type={type} color={info.color} size={56} />
                     <h3 className="vs-card-title">{t(lang, info.name)}</h3>
-                    <span className="vs-muted">{t(lang, 'attack_level')}: <b className="vs-accent-text">+{atkLvl}</b></span>
                     {EVOLUTIONS[type] && (
-                      <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + questa passiva + scrigno di un boss', 'Max level + this passive + boss chest', 'Nivel máximo + esta pasiva + cofre de jefe', 'Niveau max + ce passif + coffre de boss', '满级+此被动+Boss宝箱')}>
-                        <Sparkles size={13} /><AbilityIcon type={EVOLUTIONS[type]!} color="#fbbf24" size={18} />{clean(t(lang, getAbilityInfo(EVOLUTIONS[type]!).name))} → <b>{getEvolutionName(type, lang)}</b>
+                      <span className="vs-evo-recipe" title={L(lang, 'Livello massimo + scrigno di un boss o mini boss', 'Max level + a chest from a boss or mini boss', 'Nivel máximo + cofre de jefe o minijefe', 'Niveau max + coffre de boss ou mini-boss', '满级+Boss或小Boss宝箱')}>
+                        <Sparkles size={13} />{L(lang, 'Livello max', 'Max level', 'Nivel máx.', 'Niveau max', '满级')} → <b>{getEvolutionName(type, lang)}</b>
                       </span>
                     )}
-                    <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!canAfford} onClick={() => { const ns = upgradeAbilityAttack(storeRef.current, type); if (ns) commitStore(ns); }}>
-                      <Sparkles size={14} />+1 · <Coins size={14} />100
-                    </button>
                   </div>
                 );
               })}
             </div>
+            </>
           )}
 
           {upgradeTab === 'passive' && (
@@ -1231,54 +1348,150 @@ export default function App() {
   // ---------------------------------------------------------------------------
   // ASTRONAVI
   // ---------------------------------------------------------------------------
+  // Scheda di un'astronave (usata dall'hangar e dal negozio)
+  const renderShipCard = (ship: typeof SHIPS[number]) => {
+    const owned = !!store.ships[ship.type as keyof typeof store.ships];
+    const selected = store.currentShip === ship.type;
+    const abilityInfo = getAbilityInfo(ship.ability as AbilityType);
+    const canAfford = store.coins >= ship.price;
+    return (
+      <article key={ship.type} className={`vs-card vs-ship-card${selected ? ' is-selected' : ''}${owned ? '' : ' is-locked'}`} style={{ ['--accent' as any]: ship.color }}>
+        {selected && <span className="vs-ship-flag"><Check size={13} />{clean(t(lang, 'selected'))}</span>}
+        <div className="vs-ship-art">
+          <ShipIcon shipType={ship.type} color={ship.color} size={160} className="vs-ship-img" />
+        </div>
+        <h3 className="vs-ship-name">{t(lang, ship.nameKey)}</h3>
+        <div className="vs-ship-ability" style={{ ['--accent' as any]: abilityInfo.color }}>
+          <AbilityIcon type={ship.ability} color={abilityInfo.color} size={22} />
+          <span>{t(lang, abilityInfo.name)}</span>
+        </div>
+        {!owned && ship.iap && iapPrices ? (
+          <button
+            type="button"
+            className="vs-btn vs-btn--sm vs-btn--block vs-btn--primary"
+            disabled={iapBusy}
+            onClick={async () => {
+              setIapBusy(true);
+              const ok = await playgama.purchase(ship.iap!);
+              setIapBusy(false);
+              // l'astronave si sblocca solo a pagamento riuscito (checklist 2.4.3)
+              if (ok) { const current = storeRef.current; commitStore({ ...current, ships: { ...current.ships, [ship.type]: true } }); }
+            }}
+          >
+            <ShoppingBag size={15} />{iapPrices[ship.iap] || '…'} · {clean(t(lang, 'buy_ship'))}
+          </button>
+        ) : !owned ? (
+          <button
+            type="button"
+            className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--gold' : 'vs-btn--muted'}`}
+            disabled={!canAfford}
+            onClick={() => {
+              const current = storeRef.current;
+              if (current.coins < ship.price) return;
+              commitStore({ ...current, coins: current.coins - ship.price, ships: { ...current.ships, [ship.type]: true } });
+            }}
+          >
+            <Coins size={15} />{ship.price.toLocaleString()} · {clean(t(lang, 'buy_ship'))}
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={`vs-btn vs-btn--sm vs-btn--block ${selected ? 'vs-btn--done' : 'vs-btn--accent'}`}
+            disabled={selected}
+            onClick={() => { const current = storeRef.current; commitStore({ ...current, currentShip: ship.type as any }); }}
+          >
+            {selected ? <><Check size={15} />{clean(t(lang, 'selected'))}</> : clean(t(lang, 'select'))}
+          </button>
+        )}
+      </article>
+    );
+  };
+
+  if (screen === 'shop') {
+    return (
+      <div className="vs-screen">
+        <TopBar title={clean(t(lang, 'shop'))} icon={<ShoppingBag size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
+        <main className="vs-content vs-content--wide">
+          {playgama.isRewardedSupported() && (<>
+            <h2 className="vs-section-title vs-text-gold"><Clapperboard size={18} />{L(lang, 'Gratis con una pubblicità', 'Free with an ad', 'Gratis con un anuncio', 'Gratuit avec une pub', '看广告免费领取')}</h2>
+            <div className="vs-grid vs-grid--exchange">
+              {AD_REWARDS.map(r => (
+                <article key={r.id} className="vs-card vs-exchange-card">
+                  <span className="vs-exchange-coins">{r.coins ? <><Coins size={22} />{r.coins.toLocaleString()}</> : <><Gem size={22} />{r.diamonds}</>}</span>
+                  <button type="button" className="vs-btn vs-btn--sm vs-btn--block vs-btn--gold" disabled={iapBusy}
+                    onClick={async () => {
+                      setIapBusy(true);
+                      const ok = await playgama.showRewarded(r.id).catch(() => false);
+                      setIapBusy(false);
+                      // premio solo se la pubblicita' e' stata vista fino in fondo (checklist 2.2.5)
+                      if (ok) { const c = storeRef.current; commitStore({ ...c, coins: c.coins + (r.coins || 0), diamonds: c.diamonds + (r.diamonds || 0) }); }
+                    }}>
+                    <Clapperboard size={15} />{L(lang, 'Guarda', 'Watch ad', 'Ver', 'Voir', '观看')}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>)}
+          {iapPrices && (<>
+            <h2 className="vs-section-title vs-text-violet"><ShoppingBag size={18} />{L(lang, 'Pacchetti', 'Packs', 'Paquetes', 'Packs', '礼包')}</h2>
+            <div className="vs-grid vs-grid--packs">
+              {PACKS.filter(pk => !(pk.id === 'starter_pack' && (store.iapGranted || []).includes('starter_pack')) && !(pk.speed && store.speedX2Owned)).map(pk => (
+                <article key={pk.id} className={`vs-card vs-pack-card${pk.id === 'starter_pack' || pk.id === 'mega_pack' ? ' is-special' : ''}`}>
+                  <span className="vs-pack-title">{packTitle(lang, pk.id)}</span>
+                  <span className="vs-pack-items">
+                    {pk.coins > 0 && <span className="vs-text-gold"><Coins size={18} />{pk.coins.toLocaleString()}</span>}
+                    {pk.diamonds > 0 && <span className="vs-text-cyan"><Gem size={18} />{pk.diamonds.toLocaleString()}</span>}
+                    {pk.ship && <span><Rocket size={18} />{t(lang, SHIPS.find(sh => sh.type === pk.ship)!.nameKey)}</span>}
+                    {pk.speed && <span><Zap size={18} />x2 {L(lang, 'per sempre', 'forever', 'para siempre', 'pour toujours', '永久')}</span>}
+                  </span>
+                  <button type="button" className="vs-btn vs-btn--sm vs-btn--block vs-btn--primary" disabled={iapBusy}
+                    onClick={async () => {
+                      setIapBusy(true);
+                      const ok = await playgama.purchase(pk.id);
+                      // consegna solo a pagamento riuscito (2.4.3), poi i consumabili vanno consumati subito (2.4.4)
+                      if (ok) { commitStore(grantPack(storeRef.current, pk)); if (pk.consumable) await playgama.consumePurchase(pk.id); }
+                      setIapBusy(false);
+                    }}>
+                    <ShoppingBag size={15} />{iapPrices[pk.id] || '…'}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </>)}
+          <h2 className="vs-section-title vs-text-cyan"><Gem size={18} />{L(lang, 'Cambia diamanti in monete', 'Exchange diamonds for coins', 'Cambia diamantes por monedas', 'Échange tes diamants contre des pièces', '钻石兑换金币')}</h2>
+          <div className="vs-grid vs-grid--exchange">
+            {DIAMOND_EXCHANGE.map(ex => {
+              const can = store.diamonds >= ex.diamonds;
+              return (
+                <article key={ex.diamonds} className="vs-card vs-exchange-card">
+                  <span className="vs-exchange-coins"><Coins size={22} />{ex.coins.toLocaleString()}</span>
+                  <button type="button" className={`vs-btn vs-btn--sm vs-btn--block ${can ? 'vs-btn--accent' : 'vs-btn--muted'}`} disabled={!can}
+                    onClick={() => { const c = storeRef.current; if (c.diamonds < ex.diamonds) return; commitStore({ ...c, diamonds: c.diamonds - ex.diamonds, coins: c.coins + ex.coins }); }}>
+                    <Gem size={15} />{ex.diamonds}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+          {iapPrices && (<>
+            <h2 className="vs-section-title vs-text-gold"><Rocket size={18} />{t(lang, 'astronavi')}</h2>
+            <p className="vs-shop-note">{L(lang, 'Astronavi speciali con le armi più forti. Restano tue per sempre.', 'Special ships with the strongest weapons. Yours to keep forever.', 'Naves especiales con las armas más fuertes. Son tuyas para siempre.', 'Vaisseaux spéciaux avec les armes les plus puissantes. À toi pour toujours.', '拥有最强武器的特殊飞船，永久拥有。')}</p>
+            <div className="vs-grid vs-grid--ships">
+              {SHIPS.filter(sh => sh.iap).map(renderShipCard)}
+            </div>
+          </>)}
+        </main>
+      </div>
+    );
+  }
+
   if (screen === 'ships') {
     return (
       <div className="vs-screen">
         <TopBar title={t(lang, 'astronavi')} icon={<Rocket size={22} />} onBack={() => goTo('home')} lang={lang} right={<Currency store={store} compact />} />
         <main className="vs-content vs-content--wide">
           <div className="vs-grid vs-grid--ships">
-            {SHIPS.map(ship => {
-              const owned = !!store.ships[ship.type as keyof typeof store.ships];
-              const selected = store.currentShip === ship.type;
-              const abilityInfo = getAbilityInfo(ship.ability as AbilityType);
-              const canAfford = store.coins >= ship.price;
-              return (
-                <article key={ship.type} className={`vs-card vs-ship-card${selected ? ' is-selected' : ''}${owned ? '' : ' is-locked'}`} style={{ ['--accent' as any]: ship.color }}>
-                  {selected && <span className="vs-ship-flag"><Check size={13} />{clean(t(lang, 'selected'))}</span>}
-                  <div className="vs-ship-art">
-                    <ShipIcon shipType={ship.type} color={ship.color} size={160} className="vs-ship-img" />
-                  </div>
-                  <h3 className="vs-ship-name">{t(lang, ship.nameKey)}</h3>
-                  <div className="vs-ship-ability" style={{ ['--accent' as any]: abilityInfo.color }}>
-                    <AbilityIcon type={ship.ability} color={abilityInfo.color} size={22} />
-                    <span>{t(lang, abilityInfo.name)}</span>
-                  </div>
-                  {!owned ? (
-                    <button
-                      type="button"
-                      className={`vs-btn vs-btn--sm vs-btn--block ${canAfford ? 'vs-btn--gold' : 'vs-btn--muted'}`}
-                      disabled={!canAfford}
-                      onClick={() => {
-                        const current = storeRef.current;
-                        if (current.coins < ship.price) return;
-                        commitStore({ ...current, coins: current.coins - ship.price, ships: { ...current.ships, [ship.type]: true } });
-                      }}
-                    >
-                      <Coins size={15} />{ship.price.toLocaleString()} · {clean(t(lang, 'buy_ship'))}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`vs-btn vs-btn--sm vs-btn--block ${selected ? 'vs-btn--done' : 'vs-btn--accent'}`}
-                      disabled={selected}
-                      onClick={() => { const current = storeRef.current; commitStore({ ...current, currentShip: ship.type as any }); }}
-                    >
-                      {selected ? <><Check size={15} />{clean(t(lang, 'selected'))}</> : clean(t(lang, 'select'))}
-                    </button>
-                  )}
-                </article>
-              );
-            })}
+            {SHIPS.map(renderShipCard)}
           </div>
         </main>
       </div>
@@ -1300,6 +1513,17 @@ export default function App() {
                 {(Object.keys(languageNames) as Language[]).map(l => (
                   <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}>
                     {languageNames[l]}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="vs-panel vs-settings-wide">
+              <h2 className="vs-panel-title"><SunMoon size={18} />{t(lang, 'theme')}</h2>
+              <div className="vs-lang-grid">
+                {(['auto', 'light', 'dark'] as const).map(th => (
+                  <button key={th} type="button" className={`vs-lang${(store.settings.theme || 'dark') === th ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}>
+                    {t(lang, `theme_${th}`)}
                   </button>
                 ))}
               </div>
@@ -1376,13 +1600,13 @@ export default function App() {
         <canvas ref={canvasRef} className="vs-game-canvas" tabIndex={-1} />
 
         {!gameOver && !levelUpPending && !revivePending && !chestRewards && (
-          <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (Esc)`} onClick={togglePause}>
+          <button type="button" className="vs-pause-btn" aria-label={t(lang, 'pause')} title={`${t(lang, 'pause')} (P)`} onClick={togglePause}>
             {paused ? <Play size={20} /> : <Pause size={20} />}
           </button>
         )}
 
         <div className="vs-controls-hint" aria-hidden="true">
-          {L(lang, 'WASD / Frecce: muovi · Esc / P: pausa', 'WASD / Arrows: move · Esc / P: pause', 'WASD / Flechas: mover · Esc / P: pausa', 'WASD / Flèches : bouger · Échap / P : pause', 'WASD / 方向键：移动 · Esc / P：暂停')}
+          {L(lang, 'WASD / Frecce: muovi · P: pausa', 'WASD / Arrows: move · P: pause', 'WASD / Flechas: mover · P: pausa', 'WASD / Flèches : bouger · P : pause', 'WASD / 方向键：移动 · P：暂停')}
         </div>
 
         {levelUpPending && levelUpChoices.length > 0 && (
@@ -1419,8 +1643,8 @@ export default function App() {
                         <span className="vs-choice-desc">{isGold ? '+100 ' + t(lang, 'coins') : t(lang, choice.description)}</span>
                         {choice.abilityType && EVOLUTIONS[choice.abilityType] && (choice.type === 'ability' || (owned && curLvl + 1 >= maxLvl)) && (
                           <span className="vs-choice-evo">
-                            <AbilityIcon type={EVOLUTIONS[choice.abilityType]!} color="#fbbf24" size={18} />
-                            {L(lang, 'Evolve con', 'Evolves with', 'Evoluciona con', 'Évolue avec', '进化需要')} {clean(t(lang, getAbilityInfo(EVOLUTIONS[choice.abilityType]!).name))} → {getEvolutionName(choice.abilityType, lang)}
+                            <Sparkles size={14} />
+                            {L(lang, 'Al livello massimo si evolve in', 'At max level it evolves into', 'Al nivel máximo evoluciona en', 'Au niveau max, évolue en', '满级后进化为')} {getEvolutionName(choice.abilityType, lang)}
                           </span>
                         )}
                       </span>

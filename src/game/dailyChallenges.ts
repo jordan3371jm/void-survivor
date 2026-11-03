@@ -167,20 +167,20 @@ const fmtTime = (s: number) => { const mm = Math.floor(s / 60); return s >= 3600
 /** Testo della missione nella lingua scelta. */
 export function missionText(mi: Mission, lang: Language): string {
   const n = mi.target;
-  const T: Record<MissionKind, [string, string, string, string, string]> = {
-    kills: [`Elimina ${n} nemici`, `Defeat ${n} enemies`, `Elimina ${n} enemigos`, `Élimine ${n} ennemis`, `击败${n}个敌人`],
-    bosses: [`Sconfiggi ${n} boss`, `Defeat ${n} bosses`, `Derrota ${n} jefes`, `Vaincs ${n} boss`, `击败${n}个Boss`],
-    coins: [`Guadagna ${n} monete`, `Earn ${n} coins`, `Gana ${n} monedas`, `Gagne ${n} pièces`, `赚取${n}金币`],
-    runs: [`Gioca ${n} partite`, `Play ${n} runs`, `Juega ${n} partidas`, `Joue ${n} parties`, `进行${n}场游戏`],
-    chests: [`Apri ${n} scrigni dei boss`, `Open ${n} boss chests`, `Abre ${n} cofres de jefe`, `Ouvre ${n} coffres de boss`, `打开${n}个Boss宝箱`],
-    evolutions: [`Evolvi ${n} armi`, `Evolve ${n} weapons`, `Evoluciona ${n} armas`, `Fais évoluer ${n} armes`, `进化${n}把武器`],
-    playtime: [`Gioca per ${fmtTime(n)} in totale`, `Play for ${fmtTime(n)} in total`, `Juega ${fmtTime(n)} en total`, `Joue ${fmtTime(n)} au total`, `累计游戏${fmtTime(n)}`],
-    boss_rush: [`Completa ${n} partite Boss Rush`, `Play ${n} Boss Rush runs`, `Juega ${n} partidas Boss Rush`, `Joue ${n} parties Boss Rush`, `进行${n}场Boss Rush`],
-    survive: [`Sopravvivi ${fmtTime(n)} in una partita`, `Survive ${fmtTime(n)} in one run`, `Sobrevive ${fmtTime(n)} en una partida`, `Survis ${fmtTime(n)} en une partie`, `单局存活${fmtTime(n)}`],
-    level: [`Raggiungi il livello ${n}`, `Reach level ${n}`, `Alcanza el nivel ${n}`, `Atteins le niveau ${n}`, `达到${n}级`],
-    wave: [`Raggiungi l'ondata ${n}`, `Reach wave ${n}`, `Alcanza la oleada ${n}`, `Atteins la vague ${n}`, `到达第${n}波`],
+  const T: Record<MissionKind, [string, string, string, string, string, string]> = {
+    kills: [`Elimina ${n} nemici`, `Defeat ${n} enemies`, `Elimina ${n} enemigos`, `Élimine ${n} ennemis`, `击败${n}个敌人`, `Pokonaj wrogów: ${n}`],
+    bosses: [`Sconfiggi ${n} boss`, `Defeat ${n} bosses`, `Derrota ${n} jefes`, `Vaincs ${n} boss`, `击败${n}个Boss`, `Pokonaj bossów: ${n}`],
+    coins: [`Guadagna ${n} monete`, `Earn ${n} coins`, `Gana ${n} monedas`, `Gagne ${n} pièces`, `赚取${n}金币`, `Zdobądź monety: ${n}`],
+    runs: [`Gioca ${n} partite`, `Play ${n} runs`, `Juega ${n} partidas`, `Joue ${n} parties`, `进行${n}场游戏`, `Zagraj rozgrywki: ${n}`],
+    chests: [`Apri ${n} scrigni dei boss`, `Open ${n} boss chests`, `Abre ${n} cofres de jefe`, `Ouvre ${n} coffres de boss`, `打开${n}个Boss宝箱`, `Otwórz skrzynie bossów: ${n}`],
+    evolutions: [`Evolvi ${n} armi`, `Evolve ${n} weapons`, `Evoluciona ${n} armas`, `Fais évoluer ${n} armes`, `进化${n}把武器`, `Ewoluuj bronie: ${n}`],
+    playtime: [`Gioca per ${fmtTime(n)} in totale`, `Play for ${fmtTime(n)} in total`, `Juega ${fmtTime(n)} en total`, `Joue ${fmtTime(n)} au total`, `累计游戏${fmtTime(n)}`, `Graj łącznie przez ${fmtTime(n)}`],
+    boss_rush: [`Completa ${n} partite Boss Rush`, `Play ${n} Boss Rush runs`, `Juega ${n} partidas Boss Rush`, `Joue ${n} parties Boss Rush`, `进行${n}场Boss Rush`, `Zagraj rozgrywki Boss Rush: ${n}`],
+    survive: [`Sopravvivi ${fmtTime(n)} in una partita`, `Survive ${fmtTime(n)} in one run`, `Sobrevive ${fmtTime(n)} en una partida`, `Survis ${fmtTime(n)} en une partie`, `单局存活${fmtTime(n)}`, `Przetrwaj ${fmtTime(n)} w jednej rozgrywce`],
+    level: [`Raggiungi il livello ${n}`, `Reach level ${n}`, `Alcanza el nivel ${n}`, `Atteins le niveau ${n}`, `达到${n}级`, `Osiągnij poziom ${n}`],
+    wave: [`Raggiungi l'ondata ${n}`, `Reach wave ${n}`, `Alcanza la oleada ${n}`, `Atteins la vague ${n}`, `到达第${n}波`, `Dotrzyj do fali ${n}`],
   };
-  const idx = { it: 0, en: 1, es: 2, fr: 3, zh: 4 }[lang] ?? 1;
+  const idx = ({ it: 0, en: 1, es: 2, fr: 3, zh: 4, pl: 5 } as Record<string, number>)[lang] ?? 1;
   return T[mi.kind][idx];
 }
 

@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
+  <defs>
+    <radialGradient id="core" cx="0" cy="0" r="1" gradientTransform="matrix(0 78 -78 0 128 126)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5feff"/>
+      <stop offset=".18" stop-color="#8ef8ff"/>
+      <stop offset=".48" stop-color="#20cfe8"/>
+      <stop offset="1" stop-color="#12365c"/>
+    </radialGradient>
+    <linearGradient id="armor" x1="34" x2="225" y1="35" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5ffff"/>
+      <stop offset=".2" stop-color="#79eaf4"/>
+      <stop offset=".53" stop-color="#4679b9"/>
+      <stop offset=".82" stop-color="#253563"/>
+      <stop offset="1" stop-color="#a85df4"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="68" x2="188" y1="54" y2="205" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/>
+      <stop offset=".45" stop-color="#57e6ff"/>
+      <stop offset="1" stop-color="#c880ff"/>
+    </linearGradient>
+    <filter id="glow" width="1.7" height="1.7" x="-.35" y="-.35" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="8"/>
+    </filter>
+  </defs>
+  <circle cx="128" cy="128" r="61" fill="#42e7ff" opacity=".38" filter="url(#glow)"/>
+  <ellipse cx="128" cy="128" rx="104" ry="42" stroke="#69eaff" stroke-opacity=".5" stroke-width="3" transform="rotate(-32 128 128)"/>
+  <ellipse cx="128" cy="128" rx="104" ry="42" stroke="#dc9aff" stroke-opacity=".48" stroke-width="2" transform="rotate(32 128 128)"/>
+  <path d="m128 16 19 39 38-21-6 45 44 3-30 34 31 31-45 5 4 45-39-20-18 42-19-41-39 20 6-45-46-5 32-31-30-34 44-3-6-45 39 21 21-40Z" fill="url(#armor)" stroke="#d8fbff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="m128 35 12 32 31-16-6 36 37 2-25 28 26 26-37 4 3 37-32-17-9 33-13-32-31 16 5-36-37-4 26-27-25-28 36-2-5-36 31 16 13-32Z" fill="#142541" fill-opacity=".82" stroke="url(#edge)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="m128 67 13 20 24 4-16 17 4 24-25-11-25 11 4-24-16-17 24-4 13-20Z" fill="url(#core)" stroke="#e9ffff" stroke-width="3" stroke-linejoin="round"/>
+  <circle cx="128" cy="119" r="10" fill="#fff" opacity=".92"/>
+  <circle cx="128" cy="119" r="27" stroke="#7bf4ff" stroke-opacity=".76" stroke-width="2"/>
+  <path d="m128 79 5 29 22 11-22 10-5 29-5-29-22-10 22-11 5-29Z" fill="#f7ffff" fill-opacity=".75"/>
+  <path d="m49 103 18 7-16 10M207 103l-18 7 16 10M79 197l9-17 12 15m77 2-9-17-12 15" stroke="#b8faff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="33" r="5" fill="#fff"/>
+  <circle cx="207" cy="82" r="4" fill="#f2ceff"/>
+  <circle cx="49" cy="174" r="4" fill="#9bfbff"/>
+</svg>
