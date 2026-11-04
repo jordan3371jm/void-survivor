@@ -94,6 +94,8 @@ export interface GameStore {
     tutorialDone?: boolean;
     languageChosen?: boolean;
     theme?: 'auto' | 'light' | 'dark';
+    /** pilota automatico: la nave si muove e sceglie i potenziamenti da sola */
+    autoPlay?: boolean;
   };
   ships: {
     starter: boolean;

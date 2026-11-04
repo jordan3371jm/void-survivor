@@ -15,7 +15,8 @@ import { AbilityIcon } from './components/abilityIcon';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
-import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag } from 'lucide-react';
+import { autopilotDir, autopilotChoice } from './game/autopilot';
+import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag, Bot } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
 const LeaderboardModal = React.lazy(() => import('./profile').then((module) => ({ default: module.LeaderboardModal })));
@@ -552,6 +553,8 @@ export default function App() {
 
         state.speedMultiplier = settings.speedMultiplier || 1;
         const active = !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
+        // Pilota automatico: guida lui finche' il giocatore non tocca i comandi
+        if (active && settings.autoPlay && !joystickRef.current.active) state.touchDir = state.keys.size ? null : autopilotDir(state, dt);
         if (active) { engine.updateGame(state, dt); trackFrame(state); }
         if (active && !lowFxRef.current && rawMs > 0 && rawMs < 250) {
           const pf = perfRef.current; pf.acc += rawMs; pf.n++;
@@ -727,6 +730,35 @@ export default function App() {
     setChestRewards(null);
   }, []);
 
+  // Pilota automatico: sceglie da solo il potenziamento e chiude lo scrigno (dopo una breve pausa per vederli)
+  const autoPlay = !!store.settings.autoPlay;
+  useEffect(() => {
+    if (!autoPlay || screen !== 'playing' || paused || showTutorial) return undefined;
+    if (levelUpPending && levelUpChoices.length > 0) {
+      const id = window.setTimeout(() => {
+        const st = gameStateRef.current;
+        if (!st || !st.levelUpPending) return;
+        const pick = autopilotChoice(st, st.levelUpChoices);
+        if (pick) handleLevelUpChoice(pick);
+      }, 900);
+      return () => window.clearTimeout(id);
+    }
+    if (chestRewards) {
+      const id = window.setTimeout(closeChest, 2200);
+      return () => window.clearTimeout(id);
+    }
+    return undefined;
+  }, [autoPlay, screen, paused, showTutorial, levelUpPending, levelUpChoices, chestRewards, handleLevelUpChoice, closeChest]);
+
+  const toggleAutoPlay = useCallback(() => {
+    const c = storeRef.current;
+    const on = !c.settings.autoPlay;
+    commitStore({ ...c, settings: { ...c.settings, autoPlay: on } });
+    const st = gameStateRef.current;
+    if (st && !on) st.touchDir = null;
+    try { canvasRef.current?.focus({ preventScroll: true }); } catch { /* ignora */ }
+  }, [commitStore]);
+
   // Dopo una pubblicita' la pagina di Playgama si tiene il "focus": i tasti non arrivavano piu' al gioco
   // finche' non si cliccava. Lo riportiamo noi sul gioco.
   const focusGame = useCallback(() => {
@@ -866,6 +898,7 @@ export default function App() {
       const key = e.key.toLowerCase();
       if (MOVE_KEYS.has(key)) e.preventDefault();
       if (!e.repeat && key === 'p') { togglePause(); return; }
+      if (!e.repeat && key === 'o') { toggleAutoPlay(); return; }
       if (state.chestPending && !e.repeat && (key === 'enter' || key === ' ')) { closeChest(); return; }
       if (state.levelUpPending && !e.repeat && key === 'r') { handleReroll(); return; }
       if (state.levelUpPending && !e.repeat && ['1', '2', '3'].includes(key)) {
@@ -947,7 +980,7 @@ export default function App() {
       canvas?.removeEventListener('touchend', onTouchEnd);
       canvas?.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [screen, togglePause, handleLevelUpChoice, setPausedState, closeChest, handleReroll]);
+  }, [screen, togglePause, handleLevelUpChoice, setPausedState, closeChest, handleReroll, toggleAutoPlay]);
 
   // Se compare un pannello (level up, pausa, ecc.) il dito sollevato sopra di esso non arriva al canvas
   useEffect(() => {
@@ -1574,6 +1607,16 @@ export default function App() {
             <section className="vs-panel">
               <div className="vs-row">
                 <div>
+                  <h2 className="vs-panel-title"><Bot size={18} />{L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')}</h2>
+                  <p className="vs-muted vs-small">{L(lang, 'La nave si muove da sola, schiva i pericoli, raccoglie esperienza e oggetti e sceglie i potenziamenti. Puoi sempre riprendere i comandi', 'Your ship moves on its own, dodges danger, collects XP and items and picks upgrades. You can take control at any time', 'La nave se mueve sola, esquiva peligros, recoge experiencia y objetos y elige mejoras. Puedes retomar el control cuando quieras', 'Le vaisseau se déplace seul, esquive les dangers, ramasse l’expérience et les objets et choisit les améliorations. Tu peux reprendre la main à tout moment', '飞船会自动移动、躲避危险、收集经验和道具并选择升级。你可以随时接管控制')}</p>
+                </div>
+                <Toggle on={autoPlay} label={L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')} onChange={toggleAutoPlay} />
+              </div>
+            </section>
+
+            <section className="vs-panel">
+              <div className="vs-row">
+                <div>
                   <h2 className="vs-panel-title"><Sparkles size={18} />{L(lang, 'Tutorial', 'Tutorial', 'Tutorial', 'Tutoriel', '教程')}</h2>
                   <p className="vs-muted vs-small">{store.settings.tutorialDone ? L(lang, 'Rivedi come si gioca nella prossima partita', 'Show how to play again in your next run', 'Vuelve a ver cómo se juega en la próxima partida', 'Revois comment jouer à la prochaine partie', '在下一局重新查看玩法') : L(lang, 'Verrà mostrato all’inizio della prossima partita', 'It will be shown at the start of your next run', 'Se mostrará al inicio de la próxima partida', 'Il sera affiché au début de la prochaine partie', '将在下一局开始时显示')}</p>
                 </div>
@@ -1604,9 +1647,14 @@ export default function App() {
             {paused ? <Play size={20} /> : <Pause size={20} />}
           </button>
         )}
+        {!gameOver && !revivePending && (
+          <button type="button" className={`vs-auto-btn${autoPlay ? ' is-on' : ''}`} aria-pressed={autoPlay} aria-label={L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')} title={`${L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')} (O)`} onClick={toggleAutoPlay}>
+            <Bot size={18} /><span>AUTO</span>
+          </button>
+        )}
 
         <div className="vs-controls-hint" aria-hidden="true">
-          {L(lang, 'WASD / Frecce: muovi · P: pausa', 'WASD / Arrows: move · P: pause', 'WASD / Flechas: mover · P: pausa', 'WASD / Flèches : bouger · P : pause', 'WASD / 方向键：移动 · P：暂停')}
+          {L(lang, 'WASD / Frecce: muovi · P: pausa · O: auto', 'WASD / Arrows: move · P: pause · O: auto', 'WASD / Flechas: mover · P: pausa · O: auto', 'WASD / Flèches : bouger · P : pause · O : auto', 'WASD / 方向键：移动 · P：暂停 · O：自动')}
         </div>
 
         {levelUpPending && levelUpChoices.length > 0 && (
