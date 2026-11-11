@@ -3,6 +3,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { isKlyo, klyoSdk } from './klyo';
+import { trackPurchase } from './telemetry';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
 export const isNativeApp = (): boolean => { try { return Capacitor.isNativePlatform(); } catch { return false; } };
@@ -239,8 +240,8 @@ class PlaygamaSDK {
   /** Avvia l'acquisto: true solo se il pagamento e' andato a buon fine. */
   async purchase(id: string): Promise<boolean> {
     if (!this.paymentsSupported()) return false;
-    try { const r = await this.bridge.payments.purchase(id); return !!r; }
-    catch (e) { console.warn('[Playgama] acquisto annullato', e); return false; }
+    try { const r = await this.bridge.payments.purchase(id); trackPurchase(id, !!r, r ? undefined : null); return !!r; }
+    catch (e) { console.warn('[Playgama] acquisto annullato', e); trackPurchase(id, false, e); return false; }
   }
 
   // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:

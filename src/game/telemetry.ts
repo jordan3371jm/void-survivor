@@ -74,3 +74,15 @@ export function trackPerfFrame(frameMs: number, active: boolean): void {
   }
   frames = []; activeMs = 0; windowStart = now;
 }
+
+/** Esito di un acquisto con soldi veri: prodotto e motivo dell'errore (testo breve, niente dati personali). */
+export function trackPurchase(productId: string, ok: boolean, error?: unknown): void {
+  if (ok) { send('purchase_succeeded', { product_id: productId }); return; }
+  let reason = 'unknown';
+  try {
+    const e: any = error;
+    const raw = e == null ? 'no_result' : (typeof e === 'string' ? e : (e.code ?? e.message ?? e.name ?? String(e)));
+    reason = String(raw).replace(/\s+/g, ' ').trim().slice(0, 80) || 'unknown';
+  } catch { /* lascia 'unknown' */ }
+  send('purchase_failed', { product_id: productId, reason });
+}
