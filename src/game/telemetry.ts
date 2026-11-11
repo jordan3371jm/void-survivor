@@ -5,7 +5,7 @@
 import type { GameState } from './types';
 import { storageGetItem, storageSetItem } from './storage';
 
-export const GAME_VERSION = '1.9.5';
+export const GAME_VERSION = '1.9.7';
 const TIME_MILESTONES = [180, 300, 600]; // 3, 5 e 10 minuti di partita
 
 function send(name: string, data?: Record<string, string | number | boolean>): void {
@@ -73,4 +73,16 @@ export function trackPerfFrame(frameMs: number, active: boolean): void {
     });
   }
   frames = []; activeMs = 0; windowStart = now;
+}
+
+/** Esito di un acquisto con soldi veri: prodotto e motivo dell'errore (testo breve, niente dati personali). */
+export function trackPurchase(productId: string, ok: boolean, error?: unknown): void {
+  if (ok) { send('purchase_succeeded', { product_id: productId }); return; }
+  let reason = 'unknown';
+  try {
+    const e: any = error;
+    const raw = e == null ? 'no_result' : (typeof e === 'string' ? e : (e.code ?? e.message ?? e.name ?? String(e)));
+    reason = String(raw).replace(/\s+/g, ' ').trim().slice(0, 80) || 'unknown';
+  } catch { /* lascia 'unknown' */ }
+  send('purchase_failed', { product_id: productId, reason });
 }
