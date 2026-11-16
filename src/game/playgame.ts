@@ -245,7 +245,7 @@ class PlaygamaSDK {
   }
 
   // Banner (Advanced Banners), visibili su ogni dispositivo senza coprire niente:
-  // - computer (qualsiasi finestra): 4 banner, sopra, sotto, a sinistra e a destra, con il gioco in mezzo
+  // - computer: un solo banner in basso
   // - tutto il resto (telefoni, tablet, finestre piccole, altre schermate): una striscia in basso,
   //   e il gioco si restringe sopra (variabile CSS --ad-bottom), cosi' nessun pulsante finisce sotto.
   // Le soglie qui devono restare uguali alle chiavi di public/playgama-bridge-config.json.
@@ -273,7 +273,7 @@ class PlaygamaSDK {
     // spazio riservato ai banner (% della finestra): il gioco sta in mezzo e nessun banner copre niente
     let top = 0, bottom = 0, side = 0;
     if (target) {
-      if (device === 'desktop') { top = 7; bottom = 7; side = 10; } // ogni computer: 4 banner (sopra, sotto, sinistra, destra)
+      if (device === 'desktop') bottom = 7; // computer: un solo banner in basso
       else bottom = device === 'mobile' ? (landscape ? 14 : 8) : device === 'tablet' ? (landscape ? 8 : 6) : 8;
     }
     const pxH = (v: number) => v ? Math.round(h * v / 100) + 'px' : '0px';
