@@ -122,6 +122,18 @@ export function autopilotDir(state: GameState, dt: number): Vector2 | null {
   let cx = 0, cy = 0, cn = 0;
   for (const e of enemies) { cx += e.pos.x; cy += e.pos.y; cn++; }
 
+  // Nemici gia' a contatto (o quasi): se ne esce subito nella direzione opposta. Prima, con uno sciame
+  // incollato alla nave, tutte le direzioni sembravano ugualmente pericolose e il pilota restava li' a subire colpi.
+  let ex = 0, ey = 0;
+  for (const e of enemies) {
+    const dx = p.pos.x - e.pos.x, dy = p.pos.y - e.pos.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const gap = d - e.radius - p.radius;
+    if (gap < 30) { const w = (e.isBoss ? 3 : 1) * (1 + (30 - gap) / 30); ex += dx / d * w; ey += dy / d * w; }
+  }
+  const escLen = Math.hypot(ex, ey);
+  const escape = escLen > 0 ? { x: ex / escLen, y: ey / escLen, w: Math.min(6, escLen * 1.5) } : null;
+
   let bestDir = DIRS[0], bestCost = Infinity;
   for (const dir of DIRS) {
     let cost = 0;
@@ -142,6 +154,7 @@ export function autopilotDir(state: GameState, dt: number): Vector2 | null {
       const tangent = (dir.x * -ay + dir.y * ax) / ad;
       cost -= 0.6 * tangent + (ad < 280 ? -0.8 * radial : 0.4 * radial);
     }
+    if (escape) cost -= escape.w * (dir.x * escape.x + dir.y * escape.y);
     if (!moving) cost += 0.4; // stare fermi va bene solo se tutto il resto e' peggio
     cost -= 0.35 * (dir.x * mem.dir.x + dir.y * mem.dir.y); // evita di tremolare tra due direzioni
     if (cost < bestCost) { bestCost = cost; bestDir = dir; }

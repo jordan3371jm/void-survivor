@@ -1,4 +1,4 @@
-import { appBossName, isApp } from './appNames';
+import { appBossName } from './appNames';
 import { plFromEn } from './pl';
 import type { NebulaPool } from './types';
 import { drawEvolvedProjectile, drawEvolvedOverlays } from './evoFx';
@@ -8,10 +8,14 @@ import { getAbilityInfo } from './abilityInfo';
 import { updateBoss, updateBossHazards, clearBossHazards, drawBossHazards, drawBossAura } from './bosses';
 import { updatePickups, drawPickups, spawnPickup, rollEnemyDrop } from './progression';
 import { ensureProbe, updateProbes, drawProbes } from './probes';
+import { SpatialGrid } from './spatial';
 export { getAbilityInfo } from './abilityInfo';
 
 let idCounter = 0;
 const genId = () => `e${idCounter++}`;
+// griglia spaziale dei nemici, ricostruita a ogni frame per le collisioni dei proiettili
+const enemyGrid = new SpatialGrid<Enemy>();
+const gridHits: Enemy[] = [];
 
 // ---------------------------------------------------------------------------
 // SPRITE: immagini di nemici, boss e sfondo (public/assets). Se un'immagine non
@@ -57,7 +61,7 @@ const SPRITE_DEFS: Partial<Record<EnemyType, { file: string; scale: number; mode
   boss_cosmic_horror: { file: 'boss_cosmic_horror', scale: 1.25, mode: 'fixed' },
 };
 
-const ASSET_BASE: string = ((import.meta as any).env && (import.meta as any).env.BASE_URL) || '/';
+const ASSET_BASE: string = import.meta.env.BASE_URL || '/';
 const spriteCache: Record<string, HTMLImageElement> = {};
 
 function loadImage(path: string): HTMLImageElement | null {
@@ -413,7 +417,7 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
 
 // Modalita' leggera (dispositivi lenti, vedi App.tsx): meno particelle e niente bagliori
 function spawnParticles(state: GameState, pos: Vector2, color: string, count: number) {
-  if ((state as any).lowFx) { count = Math.ceil(count / 2); if (state.particles.length > 220) return; }
+  if (state.lowFx) { count = Math.ceil(count / 2); if (state.particles.length > 220) return; }
   else if (state.particles.length > 600) return;
   for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2; const speed = Math.random() * 200 + 50;
@@ -696,35 +700,21 @@ function processAbilities(state: GameState, dt: number): void {
       case 'neutronium_boomerang': { if (!nearest) break; const a = angle(player.pos, nearest.pos); const boomerangSpeed = 500 * (1 + player.projectileSpeedBonus); ability.timer = ability.cooldown * (1 - player.cooldownReduction); state.projectiles.push({ id: genId(), pos: { ...player.pos }, vel: { x: Math.cos(a) * boomerangSpeed, y: Math.sin(a) * boomerangSpeed }, radius: 10 * (1 + player.areaBonus), hp: 1, maxHp: 1, damage: dmg * 1.5, fromPlayer: true, lifetime: 3, maxLifetime: 3, type: 'boomerang_proj', piercing: 100, color: ability.color, trail: [] }); player.shootFlash = 1; playShoot('neutronium_boomerang'); break; }
       case 'probe_x': case 'probe_y': { ensureProbe(state, ability.type, dmg, lvl); ability.timer = 0.5; break; }
     }
-    if (ability.evolved) { for (let k = projBefore; k < state.projectiles.length; k++) { const pr = state.projectiles[k]; pr.evolved = true; pr.radius *= 1.3; pr.color = ability.color; } for (let k = poolsBefore; k < state.nebulaPools.length; k++) (state.nebulaPools[k] as any).evo = true; }
+    if (ability.evolved) { for (let k = projBefore; k < state.projectiles.length; k++) { const pr = state.projectiles[k]; pr.evolved = true; pr.radius *= 1.3; pr.color = ability.color; } for (let k = poolsBefore; k < state.nebulaPools.length; k++) state.nebulaPools[k].evo = true; }
   }
 }
 
-export function updateGame(state: GameState, dt: number): void {
-  if (state.gameOver || state.paused || state.levelUpPending || state.chestPending) return;
-  // Il timer del gioco accumula il tempo REALE (non influenzato dal speed multiplier)
-  state.time += dt;
-  // Applica speed multiplier per il gameplay
-  const gameDt = dt * state.speedMultiplier;
-  // Il timer speed boost viene gestito in App.tsx in tempo reale (non influenzato dal speed multiplier)
-  state.waveTimer += gameDt; state.screenShake = Math.max(0, state.screenShake - gameDt);
-  
-  // Aggiorna statistiche per partita singola
-  state.currentPlayTime = (state.currentPlayTime || 0) + dt;
-  state.currentLevel = state.player.level;
-  state.currentWave = state.wave;
-  state.currentScore = state.score;
-  if (state.bossNameTimer > 0) state.bossNameTimer -= gameDt;
-  // Calcola la durata dell'ondata in base al speed multiplier
-  state.wave = Math.floor(state.waveTimer / 30) + 1;
-  
+/** Ordine dei boss (Boss Rush, normale ed endless) */
+const BOSS_ORDER: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
+
+/** Comparsa di boss, nemici normali ed eventi di ondata (sciami, mini boss). */
+function updateSpawns(state: GameState, gameDt: number): void {
   // Logica spawn boss in base alla modalità di gioco
-  const bossTypes: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
   
   if (state.gameMode === 'boss_rush') {
     // Modalità Boss Rush: spawn solo boss in sequenza
-    if (!state.bossActive && !state.enemies.some(e => e.isBoss) && state.bossRushIndex < bossTypes.length) {
-      const selectedBoss = bossTypes[state.bossRushIndex];
+    if (!state.bossActive && !state.enemies.some(e => e.isBoss) && state.bossRushIndex < BOSS_ORDER.length) {
+      const selectedBoss = BOSS_ORDER[state.bossRushIndex];
       state.enemies.push(spawnEnemy(state, selectedBoss));
       state.bossActive = true;
       state.currentBossType = selectedBoss;
@@ -743,13 +733,13 @@ export function updateGame(state: GameState, dt: number): void {
       state.nextBossWave = Math.max(state.nextBossWave + 5, state.wave + 1);
       
       // Modalità Endless: dopo l'onda 40, i boss si ripetono con difficoltà crescente
-      if (state.gameMode === 'endless' && bossIndex >= bossTypes.length) {
-        bossIndex = bossIndex % bossTypes.length;
+      if (state.gameMode === 'endless' && bossIndex >= BOSS_ORDER.length) {
+        bossIndex = bossIndex % BOSS_ORDER.length;
       } else {
-        bossIndex = Math.min(bossIndex, bossTypes.length - 1);
+        bossIndex = Math.min(bossIndex, BOSS_ORDER.length - 1);
       }
       
-      const selectedBoss = bossTypes[bossIndex];
+      const selectedBoss = BOSS_ORDER[bossIndex];
       state.enemies.push(spawnEnemy(state, selectedBoss));
       state.bossActive = true;
       state.currentBossType = selectedBoss;
@@ -782,8 +772,8 @@ export function updateGame(state: GameState, dt: number): void {
     }
   }
   // --- Eventi di ondata: sciami e mini boss (solo normale/endless) ---
-  if (state.gameMode !== 'boss_rush' && state.wave !== (state as any).eventWave) {
-    (state as any).eventWave = state.wave;
+  if (state.gameMode !== 'boss_rush' && state.wave !== state.eventWave) {
+    state.eventWave = state.wave;
     const w = state.wave;
     // sciami nelle ondate 4, 6, 9, 11, 14, 16 ... 36, 39 (e oltre in endless)
     if (w >= 4 && (w % 5 === 4 || w % 5 === 1)) {
@@ -791,9 +781,9 @@ export function updateGame(state: GameState, dt: number): void {
       const dirA = Math.random() * Math.PI * 2;
       for (let g = 0; g < 3; g++) {
         const a = dirA + (g - 1) * 0.9;
-        (state as any).pendingSwarms = [ ...((state as any).pendingSwarms || []), { at: state.time + g * 2.2, a, n: Math.round(total / 3) } ];
+        state.pendingSwarms = [ ...(state.pendingSwarms || []), { at: state.time + g * 2.2, a, n: Math.round(total / 3) } ];
       }
-      (state as any).eventBanner = { text: 'swarm', t: 3 };
+      state.eventBanner = { text: 'swarm', t: 3 };
       playShoot('boss_roar');
     }
     // mini boss nelle ondate 3, 8, 13, 18, 23, 28, 33, 38 (e oltre in endless)
@@ -801,14 +791,14 @@ export function updateGame(state: GameState, dt: number): void {
       const minis: EnemyType[] = ['mini_sentinel', 'mini_hunter', 'mini_warden', 'mini_reaper'];
       const mt = minis[Math.floor((w - 3) / 5) % minis.length];
       const m = spawnEnemy(state, mt); m.isMini = true; state.enemies.push(m);
-      (state as any).eventBanner = { text: mt, t: 3 };
+      state.eventBanner = { text: mt, t: 3 };
       state.screenShake = Math.max(state.screenShake, 0.3);
     }
   }
   // gli sciami arrivano a gruppi compatti da una direzione
-  if ((state as any).pendingSwarms?.length) {
-    const ready = (state as any).pendingSwarms.filter((s: any) => state.time >= s.at);
-    (state as any).pendingSwarms = (state as any).pendingSwarms.filter((s: any) => state.time < s.at);
+  if (state.pendingSwarms?.length) {
+    const ready = state.pendingSwarms.filter(s => state.time >= s.at);
+    state.pendingSwarms = state.pendingSwarms.filter(s => state.time < s.at);
     for (const s of ready) {
       const dist0 = 650 + Math.random() * 100;
       const cx = state.player.pos.x + Math.cos(s.a) * dist0, cy = state.player.pos.y + Math.sin(s.a) * dist0;
@@ -816,8 +806,12 @@ export function updateGame(state: GameState, dt: number): void {
       for (let i = 0; i < n; i++) { const e = spawnEnemy(state, 'swarm'); const r = Math.random() * 90, b = Math.random() * Math.PI * 2; e.pos = { x: cx + Math.cos(b) * r, y: cy + Math.sin(b) * r }; e.damage *= 0.6; state.enemies.push(e); }
     }
   }
-  if ((state as any).eventBanner) { (state as any).eventBanner.t -= gameDt; if ((state as any).eventBanner.t <= 0) (state as any).eventBanner = null; }
+  if (state.eventBanner) { state.eventBanner.t -= gameDt; if (state.eventBanner.t <= 0) state.eventBanner = null; }
 
+}
+
+/** Movimento della nave (tastiera o tocco/pilota automatico), rigenerazione e camera. */
+function updatePlayerMovement(state: GameState, gameDt: number): void {
   const { player, keys } = state; let mx = 0, my = 0;
   if (keys.has('w') || keys.has('arrowup')) my -= 1;
   if (keys.has('s') || keys.has('arrowdown')) my += 1;
@@ -833,8 +827,11 @@ export function updateGame(state: GameState, dt: number): void {
   player.shootFlash = Math.max(0, player.shootFlash - gameDt * 5);
   if (player.regenPerSecond > 0 && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + player.regenPerSecond * gameDt);
   state.camera.x = player.pos.x; state.camera.y = player.pos.y;
-  processAbilities(state, gameDt);
-  updateProbes(state, gameDt);
+}
+
+/** Movimento e attacchi dei nemici, danno da contatto al giocatore. */
+function updateEnemies(state: GameState, gameDt: number): void {
+  const { player } = state;
   for (const enemy of state.enemies) {
     if (enemy.freezeTimer && enemy.freezeTimer > 0) { enemy.freezeTimer -= gameDt; if (enemy.freezeTimer <= 0) { enemy.freezeTimer = 0; enemy.speed = enemy.baseSpeed || enemy.speed; } }
     if (enemy.slowTimer && enemy.slowTimer > 0) { enemy.slowTimer -= gameDt; if (enemy.slowTimer <= 0) { enemy.slowTimer = 0; if (!(enemy.freezeTimer && enemy.freezeTimer > 0) && enemy.baseSpeed) enemy.speed = enemy.baseSpeed; } }
@@ -864,10 +861,9 @@ export function updateGame(state: GameState, dt: number): void {
         // Boss Rush: senza nemici normali non si guadagnava esperienza (si restava a livello 1 con una sola arma).
         // Ora il boss perde cristalli di esperienza ogni 5% di salute persa.
         if (state.gameMode === 'boss_rush') {
-          const anyE = enemy as any;
-          if (anyE.expDropHp === undefined) anyE.expDropHp = enemy.maxHp;
-          while (enemy.hp > 0 && enemy.hp <= anyE.expDropHp - enemy.maxHp * 0.05) {
-            anyE.expDropHp -= enemy.maxHp * 0.05;
+          if (enemy.expDropHp === undefined) enemy.expDropHp = enemy.maxHp;
+          while (enemy.hp > 0 && enemy.hp <= enemy.expDropHp - enemy.maxHp * 0.05) {
+            enemy.expDropHp -= enemy.maxHp * 0.05;
             const a = Math.random() * Math.PI * 2;
             spawnExpOrb(state, { x: enemy.pos.x + Math.cos(a) * (enemy.radius + 20), y: enemy.pos.y + Math.sin(a) * (enemy.radius + 20) }, 10 + 4 * state.bossRushIndex);
           }
@@ -876,7 +872,8 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
     enemy.pos.x += enemy.vel.x * gameDt; enemy.pos.y += enemy.vel.y * gameDt; enemy.vel.x *= 0.95; enemy.vel.y *= 0.95;
-    if (player.invincibleTimer <= 0) {
+    // un nemico gia' distrutto in questo frame (da satelliti, spade, scudo...) non fa piu' danno da contatto
+    if (player.invincibleTimer <= 0 && enemy.hp > 0) {
       const d = dist(player.pos, enemy.pos);
       if (d < player.radius + enemy.radius) {
         if (player.shieldHits > 0) { player.shieldHits--; player.invincibleTimer = 0.5; shieldPulse(state); } else { const enemyDmg = Math.max(1, enemy.damage - player.armor); player.hp -= enemyDmg; player.invincibleTimer = 0.5; state.screenShake = 0.2; }
@@ -895,10 +892,14 @@ export function updateGame(state: GameState, dt: number): void {
       }
     }
   }
-  updateBossHazards(state, gameDt);
+}
+
+/** Movimento dei proiettili e collisioni con nemici e giocatore (usa enemyGrid, gia' costruita). */
+function updateProjectiles(state: GameState, gameDt: number): void {
+  const { player } = state;
   for (const proj of state.projectiles) {
     if (proj.homing && proj.fromPlayer) { const target = getNearestEnemy(state, proj.pos, 500); if (target) { const targetAngle = angle(proj.pos, target.pos); const currentAngle = Math.atan2(proj.vel.y, proj.vel.x); const diff = targetAngle - currentAngle; const turn = Math.atan2(Math.sin(diff), Math.cos(diff)) * 3 * gameDt; const newAngle = currentAngle + turn; const speed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = Math.cos(newAngle) * speed; proj.vel.y = Math.sin(newAngle) * speed; } }
-    if (proj.type === 'boomerang_proj' && proj.fromPlayer) { const timeElapsed = proj.maxLifetime - proj.lifetime; if (timeElapsed > 1.0) { if (!(proj as any).returning) { (proj as any).returning = true; proj.hitIds = []; } const toP = normalize({ x: player.pos.x - proj.pos.x, y: player.pos.y - proj.pos.y }); const currentSpeed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = toP.x * currentSpeed; proj.vel.y = toP.y * currentSpeed; } }
+    if (proj.type === 'boomerang_proj' && proj.fromPlayer) { const timeElapsed = proj.maxLifetime - proj.lifetime; if (timeElapsed > 1.0) { if (!proj.returning) { proj.returning = true; proj.hitIds = []; } const toP = normalize({ x: player.pos.x - proj.pos.x, y: player.pos.y - proj.pos.y }); const currentSpeed = Math.sqrt(proj.vel.x * proj.vel.x + proj.vel.y * proj.vel.y); proj.vel.x = toP.x * currentSpeed; proj.vel.y = toP.y * currentSpeed; } }
     proj.pos.x += proj.vel.x * gameDt; proj.pos.y += proj.vel.y * gameDt; proj.lifetime -= gameDt;
     if (proj.trail) { proj.trail.push({ ...proj.pos }); if (proj.trail.length > 10) proj.trail.shift(); }
     if (proj.type === 'flame_puff') { proj.radius += 46 * gameDt; proj.vel.x *= 1 - 1.6 * gameDt; proj.vel.y *= 1 - 1.6 * gameDt; }
@@ -914,7 +915,8 @@ export function updateGame(state: GameState, dt: number): void {
     }
     if (proj.type === 'antimatter_explosion') { proj.radius += 300 * gameDt; for (const enemy of state.enemies) { const d = dist(proj.pos, enemy.pos); if (d < proj.radius && d > proj.radius - 30) { enemy.hp -= proj.damage; spawnDamageNumber(state, enemy.pos, proj.damage, proj.color, false, 'antimatter_bomb'); spawnParticles(state, enemy.pos, proj.color, 3); } } }
     if (proj.type === 'cryo_beam') { for (const enemy of state.enemies) { if (dist(proj.pos, enemy.pos) < (proj.aoeRadius || 50)) { if (!(enemy.freezeTimer && enemy.freezeTimer > 0) && !(enemy.slowTimer && enemy.slowTimer > 0)) enemy.baseSpeed = enemy.speed; enemy.freezeTimer = proj.duration || 5; enemy.slowTimer = 0; enemy.speed = 0; spawnParticles(state, enemy.pos, '#00ffff', 2); } } }
-    if (proj.fromPlayer) { for (const enemy of state.enemies) { if (proj.piercing && proj.piercing > 0 && proj.hitIds && proj.hitIds.includes(enemy.id)) continue; const d = dist(proj.pos, enemy.pos); if (d < proj.radius + enemy.radius) { 
+    // i nemici gia' distrutti in questo frame non assorbono piu' colpi (prima consumavano proiettili e perforazioni)
+    if (proj.fromPlayer) { for (const enemy of enemyGrid.query(proj.pos, proj.radius, gridHits)) { if (enemy.hp <= 0) continue; if (proj.piercing && proj.piercing > 0 && proj.hitIds && proj.hitIds.includes(enemy.id)) continue; const d = dist(proj.pos, enemy.pos); if (d < proj.radius + enemy.radius) { 
       // Boomerang contro boss: danno normale e non torna indietro
       if (proj.type === 'boomerang_proj' && enemy.isBoss) {
         const finalDamage = proj.damage / 1.5; // Danno normale (rimuovi il bonus 1.5x)
@@ -944,6 +946,35 @@ export function updateGame(state: GameState, dt: number): void {
     break; } } }
     if (!proj.fromPlayer && player.invincibleTimer <= 0) { const d = dist(proj.pos, player.pos); if (d < proj.radius + player.radius) { if (player.shieldHits > 0) { player.shieldHits--; proj.lifetime = 0; shieldPulse(state); } else { const projDmg = Math.max(1, proj.damage - player.armor); player.hp -= projDmg; player.invincibleTimer = 0.3; proj.lifetime = 0; spawnParticles(state, player.pos, '#ff0000', 2); if (player.hp <= 0 && player.hasRevive) { player.hp = player.maxHp * 0.5; player.hasRevive = false; player.dustReviveUsed = true; player.invincibleTimer = 2; spawnParticles(state, player.pos, '#ffffff', 12); } } } }
   }
+}
+
+export function updateGame(state: GameState, dt: number): void {
+  if (state.gameOver || state.paused || state.levelUpPending || state.chestPending) return;
+  // Il timer del gioco accumula il tempo REALE (non influenzato dal speed multiplier)
+  state.time += dt;
+  // Applica speed multiplier per il gameplay
+  const gameDt = dt * state.speedMultiplier;
+  // Il timer speed boost viene gestito in App.tsx in tempo reale (non influenzato dal speed multiplier)
+  state.waveTimer += gameDt; state.screenShake = Math.max(0, state.screenShake - gameDt);
+  
+  // Aggiorna statistiche per partita singola
+  state.currentPlayTime = (state.currentPlayTime || 0) + dt;
+  state.currentLevel = state.player.level;
+  state.currentWave = state.wave;
+  state.currentScore = state.score;
+  if (state.bossNameTimer > 0) state.bossNameTimer -= gameDt;
+  // Calcola la durata dell'ondata in base al speed multiplier
+  state.wave = Math.floor(state.waveTimer / 30) + 1;
+  
+  updateSpawns(state, gameDt);
+  const { player } = state;
+  updatePlayerMovement(state, gameDt);
+  processAbilities(state, gameDt);
+  updateProbes(state, gameDt);
+  updateEnemies(state, gameDt);
+  updateBossHazards(state, gameDt);
+  enemyGrid.build(state.enemies);
+  updateProjectiles(state, gameDt);
   for (const p of state.particles) { p.pos.x += p.vel.x * gameDt; p.pos.y += p.vel.y * gameDt; p.vel.x *= 0.95; p.vel.y *= 0.95; p.life -= gameDt; }
   for (const dmgNum of state.damageNumbers) { dmgNum.lifetime -= gameDt; dmgNum.pos.y -= 30 * gameDt; }
   state.damageNumbers = state.damageNumbers.filter(d => d.lifetime > 0);
@@ -991,7 +1022,7 @@ export function updateGame(state: GameState, dt: number): void {
         if (state.gameMode === 'boss_rush') {
           state.bossRushIndex++;
           state.score += 5000; // Bonus punti per ogni boss sconfitto
-          if (state.bossRushIndex >= bossTypes.length) { state.gameOver = true; state.victory = true; state.score += 10000; } // tutti i boss sconfitti: vittoria
+          if (state.bossRushIndex >= BOSS_ORDER.length) { state.gameOver = true; state.victory = true; state.score += 10000; } // tutti i boss sconfitti: vittoria
         }
         
         // Modalità Normale: vittoria quando si sconfigge il boss finale all'onda 40
@@ -1176,7 +1207,7 @@ function setLowFx(ctx: CanvasRenderingContext2D, on: boolean): void {
 }
 
 export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, width: number, height: number, lang: string = 'it', showDamageNumbers: boolean = true): void {
-  setLowFx(ctx, !!(state as any).lowFx);
+  setLowFx(ctx, !!state.lowFx);
   const { player, camera } = state;
   const scaleFactor = getWorldZoom(width);
   const isMobile = scaleFactor !== 1;
@@ -1829,9 +1860,9 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
   ctx.restore();
 
   // Avviso di evento (sciame o mini boss)
-  const ev = (state as any).eventBanner as { text: string; t: number } | null;
+  const ev = state.eventBanner;
   if (ev && !(state.currentBossType && state.bossNameTimer > 0)) {
-    const L5 = (it: string, en: string, es: string, fr: string, zh: string) => lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as any)[lang] || en;
+    const L5 = (it: string, en: string, es: string, fr: string, zh: string) => lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] || en;
     const MINI: Record<string, string> = {
       mini_sentinel: L5('SENTINELLA', 'SENTINEL', 'CENTINELA', 'SENTINELLE', '哨兵'), mini_hunter: L5('CACCIATORE', 'HUNTER', 'CAZADOR', 'CHASSEUR', '猎手'),
       mini_warden: L5('GUARDIANO', 'WARDEN', 'GUARDIÁN', 'GARDIEN', '守望者'), mini_reaper: L5('MIETITORE', 'REAPER', 'SEGADOR', 'FAUCHEUR', '收割者'),
@@ -1858,10 +1889,10 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     const introScale = Math.min(1, width / 760);
     if (introScale < 1) { ctx.translate(width / 2, height / 2 - 50); ctx.scale(introScale, introScale); ctx.translate(-width / 2, -(height / 2 - 50)); }
     const bgWidth = width * 0.85 / introScale; const bgHeight = 140; const bgX = (width - bgWidth) / 2; const bgY = height / 2 - 110; const centerX = width / 2; const centerY = height / 2 - 50;
-    if (state.currentBossType === 'boss_death_star') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX + bgWidth, bgY); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.2, 'rgba(20, 20, 40, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(40, 0, 0, 0.9)'); bgGrad.addColorStop(0.8, 'rgba(20, 20, 40, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2; ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 10; for (let i = 0; i < 3; i++) { const y = bgY + 30 + i * 40; ctx.globalAlpha = alpha * (0.3 + i * 0.2); ctx.beginPath(); ctx.moveTo(bgX + 30, y); ctx.lineTo(bgX + bgWidth - 30, y); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 42px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 25; ctx.fillText(bossName, centerX, centerY); ctx.shadowBlur = 40; ctx.globalAlpha = alpha * 0.4; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.7; ctx.fillStyle = '#ff4444'; ctx.font = 'bold 16px serif'; ctx.fillText(isApp() ? 'THE IRON TYRANNY' : 'GALACTIC EMPIRE', centerX, centerY + 35); }
+    if (state.currentBossType === 'boss_death_star') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX + bgWidth, bgY); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.2, 'rgba(20, 20, 40, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(40, 0, 0, 0.9)'); bgGrad.addColorStop(0.8, 'rgba(20, 20, 40, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 2; ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 10; for (let i = 0; i < 3; i++) { const y = bgY + 30 + i * 40; ctx.globalAlpha = alpha * (0.3 + i * 0.2); ctx.beginPath(); ctx.moveTo(bgX + 30, y); ctx.lineTo(bgX + bgWidth - 30, y); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ffcc00'; ctx.font = 'bold 42px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffcc00'; ctx.shadowBlur = 25; ctx.fillText(bossName, centerX, centerY); ctx.shadowBlur = 40; ctx.globalAlpha = alpha * 0.4; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.7; ctx.fillStyle = '#ff4444'; ctx.font = 'bold 16px serif'; ctx.fillText('THE IRON TYRANNY', centerX, centerY + 35); }
     else if (state.currentBossType === 'boss_xenomorph') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(0, 40, 0, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(0, 20, 0, 0.6)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.fillStyle = '#00ff00'; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 8; for (let i = 0; i < 12; i++) { const dx = bgX + Math.random() * bgWidth; const dy = bgY + Math.random() * bgHeight; ctx.globalAlpha = alpha * (0.2 + Math.random() * 0.3); ctx.beginPath(); ctx.arc(dx, dy, 2 + Math.random() * 4, 0, Math.PI * 2); ctx.fill(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#00ff44'; ctx.font = 'bold 44px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.3; ctx.fillStyle = '#44ff88'; ctx.fillText(bossName, centerX + 2, centerY + 2); }
     else if (state.currentBossType === 'boss_cthulhu') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(0, 60, 40, 0.9)'); bgGrad.addColorStop(0.4, 'rgba(20, 40, 30, 0.7)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 1; ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 5; ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2 + state.time * 0.5; const r = 60 + Math.sin(state.time * 2 + i) * 20; ctx.beginPath(); ctx.arc(centerX + Math.cos(a) * r, centerY + Math.sin(a) * r, 5, 0, Math.PI * 2); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#88ffaa'; ctx.font = 'bold italic 40px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#00ff88'; ctx.shadowBlur = 25; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = '#44aa66'; ctx.font = 'italic 14px serif'; ctx.fillText("Ph'nglui mglw'nafh", centerX, centerY + 35); }
-    else if (state.currentBossType === 'boss_borg_cube') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX, bgY + bgHeight); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.3, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(0.7, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 1; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 3; ctx.globalAlpha = alpha * 0.3; for (let i = 0; i < 20; i++) { const x = bgX + (i / 20) * bgWidth; ctx.beginPath(); ctx.moveTo(x, bgY); ctx.lineTo(x, bgY + bgHeight); ctx.stroke(); } for (let i = 0; i < 8; i++) { const y = bgY + (i / 8) * bgHeight; ctx.beginPath(); ctx.moveTo(bgX, y); ctx.lineTo(bgX + bgWidth, y); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#00ff00'; ctx.font = 'bold 38px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 20; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.7; ctx.fillStyle = '#88ff88'; ctx.font = '14px monospace'; ctx.fillText(isApp() ? 'ALL WILL BE ONE' : 'RESISTANCE IS FUTILE', centerX, centerY + 35); }
+    else if (state.currentBossType === 'boss_borg_cube') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX, bgY + bgHeight); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.3, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(0.7, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 1; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 3; ctx.globalAlpha = alpha * 0.3; for (let i = 0; i < 20; i++) { const x = bgX + (i / 20) * bgWidth; ctx.beginPath(); ctx.moveTo(x, bgY); ctx.lineTo(x, bgY + bgHeight); ctx.stroke(); } for (let i = 0; i < 8; i++) { const y = bgY + (i / 8) * bgHeight; ctx.beginPath(); ctx.moveTo(bgX, y); ctx.lineTo(bgX + bgWidth, y); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#00ff00'; ctx.font = 'bold 38px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 20; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.7; ctx.fillStyle = '#88ff88'; ctx.font = '14px monospace'; ctx.fillText('ALL WILL BE ONE', centerX, centerY + 35); }
     else if (state.currentBossType === 'boss_space_kraken') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(60, 0, 80, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(30, 0, 60, 0.6)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#aa44ff'; ctx.lineWidth = 3; ctx.shadowColor = '#aa44ff'; ctx.shadowBlur = 10; ctx.globalAlpha = alpha * 0.5; for (let i = 0; i < 6; i++) { ctx.beginPath(); const startX = bgX + (i / 6) * bgWidth; ctx.moveTo(startX, bgY + bgHeight); for (let j = 0; j < 5; j++) { const cx = startX + Math.sin(state.time * 2 + i + j) * 30; const cy = bgY + bgHeight - (j / 5) * bgHeight; ctx.lineTo(cx, cy); } ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ff44ff'; ctx.font = 'bold 44px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 25; ctx.fillText(bossName, centerX, centerY); }
     else if (state.currentBossType === 'boss_galaxy_devourer') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(40, 0, 60, 0.9)'); bgGrad.addColorStop(0.3, 'rgba(20, 0, 40, 0.7)'); bgGrad.addColorStop(0.7, 'rgba(10, 0, 20, 0.5)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#8844ff'; ctx.lineWidth = 2; ctx.shadowColor = '#8844ff'; ctx.shadowBlur = 8; ctx.globalAlpha = alpha * 0.4; for (let s = 0; s < 2; s++) { ctx.beginPath(); for (let i = 0; i < 50; i++) { const a = (i / 50) * Math.PI * 4 + s * Math.PI + state.time * 0.3; const r = (i / 50) * bgWidth * 0.4; const px = centerX + Math.cos(a) * r; const py = centerY + Math.sin(a) * r * 0.4; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#cc88ff'; ctx.font = 'bold 40px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#aa44ff'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.shadowBlur = 50; ctx.globalAlpha = alpha * 0.3; ctx.fillText(bossName, centerX, centerY); }
     else if (state.currentBossType === 'boss_void_emperor') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX + bgWidth, bgY); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.2, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(80, 0, 100, 0.9)'); bgGrad.addColorStop(0.8, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 15; ctx.globalAlpha = alpha * 0.6; for (let i = 0; i < 7; i++) { const px = bgX + 60 + (i / 6) * (bgWidth - 120); ctx.beginPath(); ctx.moveTo(px, bgY + 20); ctx.lineTo(px + 10, bgY + 5); ctx.lineTo(px + 20, bgY + 20); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ff88ff'; ctx.font = 'bold 46px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = '#cc44ff'; ctx.font = 'bold 14px serif'; ctx.fillText('⚜ RULER OF THE VOID ⚜', centerX, centerY + 35); }

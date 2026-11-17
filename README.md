@@ -9,18 +9,17 @@ npm install
 npm run dev       # sviluppo: http://localhost:5173
 npm run build     # build di produzione nella cartella dist/
 npm run preview   # prova la build
+npm test          # test automatici del motore (vitest)
+npm run typecheck # controllo dei tipi
 ```
 
 La build usa percorsi relativi: il contenuto di `dist/` si può caricare così com'è
-(Playgama, hosting statico, sottocartelle). La cartella `dist/` è già inclusa nel repository,
-pronta da pubblicare: dopo ogni modifica rigenerala con `npm run build`.
+(Playgama, hosting statico, sottocartelle). `dist/` non è più nel repository: generala con
+`npm run build` prima di pubblicare.
 
-## Klyo Games
-
-`npm run build:klyo` crea la cartella `dist-klyo/` e il file `void-survivors-klyo.zip`
-(con `index.html` alla radice), pronto da caricare su [dev.klyo.pl](https://dev.klyo.pl).
-Questa versione non carica Playgama Bridge (niente pubblicità nel gioco: su Klyo gli annunci
-sono intorno al gioco) e usa i nomi senza marchi registrati e la musica libera CC0, come l'app.
+Il gioco usa ovunque (web, Playgama, app) nomi senza marchi registrati e la musica libera CC0
+(`public/audio/bgm-free.mp3`). Account e salvataggi online passano solo da Playgama Bridge;
+fuori da Playgama i progressi restano sul dispositivo.
 
 Immagini promozionali (16:9 e 9:16) nella cartella `promo/`.
 
@@ -33,6 +32,8 @@ src/main.tsx            avvio (Bridge + salvataggi, poi il gioco)
 src/App.tsx             interfaccia: home, modalità, astronavi, potenziamenti, impostazioni, partita
 src/index.css           grafica (design system, responsive PC / telefono)
 src/game/engine.ts      motore di gioco e HUD
+src/game/spatial.ts     griglia spaziale per le collisioni proiettili-nemici
+src/game/__tests__/     test automatici (vitest)
 src/game/bosses.ts      mosse e attacchi dei boss (preavvisi, seconda fase, difficoltà crescente)
 src/game/*.ts           salvataggi, audio, traduzioni, obiettivi, sfide, Playgama
 src/components/         icone di navi e abilità
@@ -52,10 +53,10 @@ Ogni boss successivo nella stessa partita è più forte.
 
 | Boss | Mosse |
 |---|---|
-| Morte Nera | superlaser, raffiche di turbolaser, squadriglia imperiale, trincea laser (fase 2) |
-| Regina Xenomorfa | sputi acidi, balzo, covata di parassiti, colpo di coda, urlo (fase 2) |
+| Distruttore di Pianeti | superlaser, raffiche di turbolaser, squadriglia imperiale, trincea laser (fase 2) |
+| Regina dell'Alveare | sputi acidi, balzo, covata di parassiti, colpo di coda, urlo (fase 2) |
 | Cthulhu Cosmico | tentacoli, onde di follia, occhi, spirale degli abissi |
-| Cubo Borg | raggio traente, droni, griglia laser, scudo di adattamento (fase 2) |
+| Cubo Assimilatore | raggio traente, droni, griglia laser, scudo di adattamento (fase 2) |
 | Kraken Spaziale | pioggia di tentacoli, inchiostro, gorgo, tentacoli rotanti |
 | Divoratore di Galassie | buco nero, braccia a spirale, raggi cosmici, pioggia di stelle |
 | Imperatore del Vuoto | lance del vuoto, nova oscura, giudizio a croce, teletrasporto |

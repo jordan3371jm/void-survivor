@@ -1,4 +1,3 @@
-import { isApp } from './appNames';
 let audioCtx: AudioContext | null = null;
 let isMusicPlaying = false;
 let sfxVolume = 0.7;
@@ -7,11 +6,11 @@ let musicNodes: any[] = [];
 let customAudioElement: HTMLAudioElement | null = null;
 let useCustomMusic = false;
 let musicMaster: GainNode | null = null;
-// Colonna sonora del gioco (public/audio/bgm.mp3): in streaming, parte all'inizio della partita
+// Colonna sonora del gioco (public/audio/bgm-free.mp3): in streaming, parte all'inizio della partita
 let trackAudio: HTMLAudioElement | null = null;
 let trackFailed = false;
-// Nell'app Android/iOS si usa un brano libero da diritti (CC0, "Space Battle" di MintoDog, opengameart.org)
-const TRACK_URL = `${import.meta.env.BASE_URL || '/'}audio/${isApp() ? 'bgm-free.mp3' : 'bgm.mp3'}`;
+// Brano libero da diritti (CC0, "Space Battle" di MintoDog, opengameart.org)
+const TRACK_URL = `${import.meta.env.BASE_URL || '/'}audio/bgm-free.mp3`;
 // la colonna sonora resta in sottofondo: al 100% del cursore suona al 32%, cosi' colpi ed effetti si sentono bene
 const TRACK_GAIN = 0.32;
 const lastSfxAt: Record<string, number> = {};

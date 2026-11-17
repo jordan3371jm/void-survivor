@@ -1,13 +1,11 @@
 // ---------------------------------------------------------------------------
-// Nomi usati SOLO nell'app Android/iOS: gli store rifiutano le app che usano marchi registrati
-// (Star Wars, Star Trek, Alien...). Sul web (Playgama) restano i nomi originali.
-// Anche la build per Klyo Games (VITE_TARGET=klyo) usa i nomi senza marchi e la musica CC0.
+// Nomi senza marchi registrati (Star Wars, Star Trek, Alien...), usati ovunque: app, web e Playgama.
+// Gli store e i portali rifiutano o rimuovono i giochi che usano marchi altrui.
 // ---------------------------------------------------------------------------
 import { Capacitor } from '@capacitor/core';
 
 let native: boolean | null = null;
 export function isApp(): boolean {
-  if (import.meta.env.VITE_TARGET === 'klyo') return true;
   if (native === null) { try { native = Capacitor.isNativePlatform(); } catch { native = false; } }
   return native;
 }
@@ -50,6 +48,6 @@ const EVOS: Record<string, L5> = {
 };
 
 const pick = (m: L5, lang: string) => (m as any)[lang] ?? m.en;
-export function appBossName(key: string, lang: string): string | null { return isApp() && BOSSES[key] ? pick(BOSSES[key], lang) : null; }
-export function appText(key: string, lang: string): string | null { if (!isApp()) return null; return (TEXTS as any)[lang]?.[key] ?? null; }
-export function appEvoName(type: string, lang: string): string | null { return isApp() && EVOS[type] ? pick(EVOS[type], lang) : null; }
+export function appBossName(key: string, lang: string): string | null { return BOSSES[key] ? pick(BOSSES[key], lang) : null; }
+export function appText(key: string, lang: string): string | null { return (TEXTS as any)[lang]?.[key] ?? null; }
+export function appEvoName(type: string, lang: string): string | null { return EVOS[type] ? pick(EVOS[type], lang) : null; }
