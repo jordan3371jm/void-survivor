@@ -15,9 +15,14 @@ const TRACK_URL = `${import.meta.env.BASE_URL || '/'}audio/bgm-free.mp3`;
 const TRACK_GAIN = 0.32;
 const lastSfxAt: Record<string, number> = {};
 
+// Se il browser non ha Web Audio, lo si ricorda: prima ogni effetto sonoro riprovava a creare il contesto
+// e lanciava un'eccezione (centinaia di volte al secondo con tanti nemici).
+let audioUnavailable = false;
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
-    audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const Ctor = typeof window !== 'undefined' ? (window.AudioContext || (window as any).webkitAudioContext) : undefined;
+    if (!Ctor) { audioUnavailable = true; throw new Error('Web Audio non disponibile'); }
+    audioCtx = new Ctor();
   }
   return audioCtx;
 }
@@ -342,7 +347,7 @@ export function stopBackgroundMusic() {
 
 export function playShoot(type: string = 'laser') {
   try {
-    if (sfxVolume <= 0) return;
+    if (sfxVolume <= 0 || audioUnavailable) return;
     const ctx = getAudioContext();
     if (ctx.state !== 'running') return;
     // Limita i suoni identici ravvicinati: con tanti nemici centinaia di oscillatori al secondo bloccavano l'audio sui telefoni
@@ -397,7 +402,7 @@ export function playShoot(type: string = 'laser') {
 
 export function playPassiveSound(type: string) {
   try {
-    if (sfxVolume <= 0) return;
+    if (sfxVolume <= 0 || audioUnavailable) return;
     const ctx = getAudioContext();
     if (ctx.state !== 'running') return;
     const osc = ctx.createOscillator();
@@ -458,7 +463,7 @@ const lastHitAt: Record<string, number> = {};
 /** Suono del colpo a segno di un'arma (limitato a uno ogni 70 ms per arma). */
 export function playHit(type: string) {
   const def = HIT_SOUNDS[type];
-  if (!def || sfxVolume <= 0) return;
+  if (!def || sfxVolume <= 0 || audioUnavailable) return;
   try {
     const ctx = getAudioContext();
     if (ctx.state !== 'running') return;

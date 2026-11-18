@@ -45,6 +45,10 @@ function pickTarget(state: GameState): Vector2 | null {
   return best;
 }
 
+/** Distanza sotto la quale un nemico comincia a pesare nel costo. */
+const safeGap = (e: GameState['enemies'][number]) => e.isBoss ? 230 : e.pattern === 'kamikaze' ? 130 : 95;
+const BULLET_GAP = 42;
+
 /** Quanto e' pericoloso trovarsi nel punto q tra tau secondi. */
 function danger(state: GameState, q: Vector2, tau: number, enemies: GameState['enemies'], projs: GameState['projectiles'], hz: BossHazard[]): number {
   const pr = state.player.radius;
@@ -52,13 +56,13 @@ function danger(state: GameState, q: Vector2, tau: number, enemies: GameState['e
   for (const e of enemies) {
     const ex = e.pos.x + (e.vel?.x || 0) * tau, ey = e.pos.y + (e.vel?.y || 0) * tau;
     const gap = Math.hypot(q.x - ex, q.y - ey) - e.radius - pr;
-    const safe = e.isBoss ? 230 : e.pattern === 'kamikaze' ? 130 : 95;
+    const safe = safeGap(e);
     if (gap < safe) { const k = (safe - gap) / safe; c += (e.isBoss ? 5 : 1.4) * k * k + (gap < 4 ? 8 : 0); }
   }
   for (const b of projs) {
     const bx = b.pos.x + b.vel.x * tau, by = b.pos.y + b.vel.y * tau;
     const gap = Math.hypot(q.x - bx, q.y - by) - b.radius - pr;
-    if (gap < 42) { const k = (42 - gap) / 42; c += 6 * k * k + (gap < 0 ? 6 : 0); }
+    if (gap < BULLET_GAP) { const k = (BULLET_GAP - gap) / BULLET_GAP; c += 6 * k * k + (gap < 0 ? 6 : 0); }
   }
   for (const h of hz) {
     const tActive = h.telegraph - h.t; // secondi prima che colpisca (negativo = gia' attiva)
@@ -134,12 +138,25 @@ export function autopilotDir(state: GameState, dt: number): Vector2 | null {
   const escLen = Math.hypot(ex, ey);
   const escape = escLen > 0 ? { x: ex / escLen, y: ey / escLen, w: Math.min(6, escLen * 1.5) } : null;
 
+  // Per ogni istante di previsione si tengono solo nemici e proiettili raggiungibili: chi resta lontano
+  // anche muovendosi alla massima velocita' non cambia il costo (contribuirebbe 0), quindi il risultato e'
+  // identico ma con molti meno calcoli (17 direzioni x 3 istanti x centinaia di nemici a ogni frame).
+  const pr = p.radius;
+  const near = LOOKAHEAD.map(tau => {
+    const reach = speed * tau + 1;
+    return {
+      en: enemies.filter(e => Math.hypot(p.pos.x - (e.pos.x + (e.vel?.x || 0) * tau), p.pos.y - (e.pos.y + (e.vel?.y || 0) * tau)) - e.radius - pr - reach < safeGap(e)),
+      pj: projs.filter(b => Math.hypot(p.pos.x - (b.pos.x + b.vel.x * tau), p.pos.y - (b.pos.y + b.vel.y * tau)) - b.radius - pr - reach < BULLET_GAP),
+    };
+  });
+
   let bestDir = DIRS[0], bestCost = Infinity;
   for (const dir of DIRS) {
     let cost = 0;
-    for (const tau of LOOKAHEAD) {
+    for (let t = 0; t < LOOKAHEAD.length; t++) {
+      const tau = LOOKAHEAD[t];
       const q = { x: p.pos.x + dir.x * speed * tau, y: p.pos.y + dir.y * speed * tau };
-      cost += danger(state, q, tau, enemies, projs, hz) * (tau < 0.3 ? 1.3 : 1);
+      cost += danger(state, q, tau, near[t].en, near[t].pj, hz) * (tau < 0.3 ? 1.3 : 1);
     }
     const moving = dir.x !== 0 || dir.y !== 0;
     if (mem.target && moving) {

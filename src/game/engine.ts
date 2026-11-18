@@ -116,6 +116,70 @@ export function getBossIcon(type: string): HTMLImageElement | null {
   return loadImage(`icons/${type}.webp`);
 }
 
+// ---------------------------------------------------------------------------
+// Cache delle immagini ridotte. Ridurre a ogni frame uno sprite da 256 px a ~50 px (o lo sfondo da
+// 2048 px) era la parte piu' lenta del disegno: ora ogni immagine si riduce una volta sola, in copie
+// dimezzate (256, 128, 64, 32 px...), e a ogni frame si usa la copia piu' vicina alla misura sullo schermo.
+// ---------------------------------------------------------------------------
+type Drawable = HTMLImageElement | HTMLCanvasElement;
+const mipCache = new WeakMap<HTMLImageElement, HTMLCanvasElement[]>();
+
+function makeCanvas(w: number, h: number): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+  return c;
+}
+
+/** Scala del canvas in pixel reali (densita' dello schermo x eventuale zoom del mondo). */
+function deviceScale(ctx: CanvasRenderingContext2D): number {
+  const m = ctx.getTransform();
+  return Math.hypot(m.a, m.b) || 1;
+}
+
+/** La copia dell'immagine piu' piccola che sia ancora almeno grande quanto `px` pixel reali. */
+function mipFor(img: HTMLImageElement, px: number): Drawable {
+  let levels = mipCache.get(img);
+  if (!levels) {
+    levels = [];
+    let src: Drawable = img, w = img.naturalWidth, h = img.naturalHeight;
+    while (w >= 64 && h >= 64) {
+      const c = makeCanvas(w / 2, h / 2);
+      const cx = c?.getContext('2d');
+      if (!c || !cx) break;
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(src, 0, 0, c.width, c.height);
+      levels.push(c); src = c; w = c.width; h = c.height;
+    }
+    mipCache.set(img, levels);
+  }
+  let best: Drawable = img;
+  for (const c of levels) { if (c.width >= px) best = c; else break; }
+  return best;
+}
+
+/** drawImage con la copia ridotta adatta alla misura finale (stesso risultato, molto meno lavoro). */
+function drawSprite(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number): void {
+  ctx.drawImage(mipFor(img, Math.max(w, h) * deviceScale(ctx)), x, y, w, h);
+}
+
+/** Sfondo gia' ridotto alla misura del tile e con il velo scuro incluso (si rifa' solo se cambia la misura). */
+let bgTile: { img: HTMLImageElement; w: number; h: number; canvas: HTMLCanvasElement } | null = null;
+function nebulaTile(bg: HTMLImageElement, w: number, h: number): Drawable | null {
+  const pw = Math.round(w), ph = Math.round(h);
+  if (bgTile && bgTile.img === bg && bgTile.w === pw && bgTile.h === ph) return bgTile.canvas;
+  const c = makeCanvas(pw, ph);
+  const cx = c?.getContext('2d');
+  if (!c || !cx) return null;
+  cx.imageSmoothingQuality = 'high';
+  cx.drawImage(bg, 0, 0, pw, ph);
+  // velo scuro: lo sfondo resta bello ma non compete con nemici e proiettili
+  cx.fillStyle = 'rgba(4, 5, 14, 0.28)';
+  cx.fillRect(0, 0, pw, ph);
+  bgTile = { img: bg, w: pw, h: ph, canvas: c };
+  return c;
+}
+
 /** Disegna lo sprite di un nemico/boss centrato sull'origine corrente. Ritorna false se va usato il disegno vettoriale. */
 function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: GameState): boolean {
   const def = SPRITE_DEFS[enemy.type];
@@ -137,7 +201,7 @@ function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: Gam
   const pulse = 1 + Math.sin(state.time * (enemy.isBoss ? 1.5 : 3) + seed) * (enemy.isBoss ? 0.02 : 0.04);
   ctx.scale(pulse, pulse);
   if (enemy.isBoss) { ctx.shadowColor = enemy.color; ctx.shadowBlur = 25; }
-  ctx.drawImage(img, -size / 2, -size / 2, size, size);
+  drawSprite(ctx, img, -size / 2, -size / 2, size, size);
   // lampo bianco quando il nemico viene colpito
   const ee = enemy as any;
   if (ee.__lastHp !== undefined && enemy.hp < ee.__lastHp - 0.5) ee.__flash = 0.09;
@@ -146,25 +210,26 @@ function drawEnemySprite(ctx: CanvasRenderingContext2D, enemy: Enemy, state: Gam
     ee.__flash -= 1 / 60;
     ctx.shadowBlur = 0;
     ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.5;
-    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    drawSprite(ctx, img, -size / 2, -size / 2, size, size);
   }
   ctx.restore();
   return true;
 }
 
 /** Sfondo nebulosa: immagine ripetibile senza cuciture, con parallasse lenta e velo scuro per far risaltare il gioco. */
-function drawNebulaBackground(ctx: CanvasRenderingContext2D, camera: { x: number; y: number }, width: number, height: number): void {
+function drawNebulaBackground(ctx: CanvasRenderingContext2D, camera: { x: number; y: number }, width: number, height: number): boolean {
   const bg = loadImage('bg_nebula.webp');
-  if (!bg) return;
+  if (!bg) return false;
   const s = Math.max(0.75, Math.min(width, height) / 1100);
   const tw = bg.naturalWidth * s, th = bg.naturalHeight * s;
   const offX = ((camera.x * 0.08) % tw + tw) % tw, offY = ((camera.y * 0.08) % th + th) % th;
+  const ds = deviceScale(ctx);
+  const tile = nebulaTile(bg, (tw + 1) * ds, (th + 1) * ds);
+  if (!tile) return false;
   for (let y = -offY; y < height; y += th) {
-    for (let x = -offX; x < width; x += tw) ctx.drawImage(bg, x, y, tw + 1, th + 1);
+    for (let x = -offX; x < width; x += tw) ctx.drawImage(tile, Math.round(x * ds) / ds, Math.round(y * ds) / ds, tile.width / ds, tile.height / ds);
   }
-  // velo scuro: lo sfondo resta bello ma non compete con nemici e proiettili
-  ctx.fillStyle = 'rgba(4, 5, 14, 0.28)';
-  ctx.fillRect(0, 0, width, height);
+  return true;
 }
 
 preloadSprites();
@@ -302,6 +367,13 @@ export function applyPassiveAbilities(player: Player): void {
   if (hpDelta > 0) player.hp += hpDelta; else if (player.hp > player.maxHp) player.hp = player.maxHp;
   player.speed = b.speed * (1 + player.moveSpeedBonus);
   player.magnetRange = b.magnetRange * (1 + player.pickupRangeBonus);
+}
+
+/** Toglie dall'array, sul posto, gli elementi che non rispettano la condizione (mantiene l'ordine). */
+function keepWhere<T>(arr: T[], keep: (x: T) => boolean): void {
+  let w = 0;
+  for (let i = 0; i < arr.length; i++) { const x = arr[i]; if (keep(x)) arr[w++] = x; }
+  arr.length = w;
 }
 
 function dist(a: Vector2, b: Vector2): number { const dx = a.x - b.x; const dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); }
@@ -977,7 +1049,7 @@ export function updateGame(state: GameState, dt: number): void {
   updateProjectiles(state, gameDt);
   for (const p of state.particles) { p.pos.x += p.vel.x * gameDt; p.pos.y += p.vel.y * gameDt; p.vel.x *= 0.95; p.vel.y *= 0.95; p.life -= gameDt; }
   for (const dmgNum of state.damageNumbers) { dmgNum.lifetime -= gameDt; dmgNum.pos.y -= 30 * gameDt; }
-  state.damageNumbers = state.damageNumbers.filter(d => d.lifetime > 0);
+  keepWhere(state.damageNumbers, d => d.lifetime > 0);
   for (const orb of state.expOrbs) { const d = dist(player.pos, orb.pos); if (d < player.magnetRange) orb.magnetized = true; if (orb.magnetized) { const dir = normalize({ x: player.pos.x - orb.pos.x, y: player.pos.y - orb.pos.y }); /* prima, oltre il raggio del magnete la velocita' diventava negativa e i cristalli volavano via */ const speed = Math.max(450 + Math.max(0, player.magnetRange - d) * 3, d * 1.6); const step = Math.min(d, speed * gameDt); orb.pos.x += dir.x * step; orb.pos.y += dir.y * step; } if (dist(player.pos, orb.pos) < player.radius + orb.radius + 2) { state.score += orb.value; const expGained = Math.floor(orb.value * (1 + player.expBonus)); player.exp += expGained; orb.value = 0; } }
   // Spade laser: ogni nemico subisce al massimo un colpo per frame anche se tocca piu' spade
   // (prima con 5 spade il danno sullo stesso nemico si moltiplicava per 5: arma troppo forte)
@@ -1063,44 +1135,44 @@ export function updateGame(state: GameState, dt: number): void {
     }
     return true;
   });
-  state.projectiles = state.projectiles.filter(p => p.lifetime > 0);
-  state.particles = state.particles.filter(p => p.life > 0);
-  state.expOrbs = state.expOrbs.filter(o => o.value > 0);
+  // pulizia sul posto: niente array nuovi a ogni frame (meno lavoro per il garbage collector, meno scatti)
+  keepWhere(state.projectiles, p => p.lifetime > 0);
+  keepWhere(state.particles, p => p.life > 0);
+  keepWhere(state.expOrbs, o => o.value > 0);
   if (state.expOrbs.length > 50) {
     const mergeDistance = 40;
     const cellSize = mergeDistance;
-    const grid = new Map<string, number[]>();
-    for (let i = 0; i < state.expOrbs.length; i++) {
-      const orb = state.expOrbs[i];
-      const cellX = Math.floor(orb.pos.x / cellSize);
-      const cellY = Math.floor(orb.pos.y / cellSize);
-      const key = `${cellX},${cellY}`;
-      if (!grid.has(key)) grid.set(key, []);
-      grid.get(key)!.push(i);
+    // chiavi numeriche e array tipizzati: prima chiavi di testo e split() a ogni frame (la parte piu' lenta dell'aggiornamento)
+    const orbs = state.expOrbs;
+    const grid = new Map<number, { cx: number; cy: number; idx: number[] }>();
+    const cellKey = (cx: number, cy: number) => ((cx & 0xffff) << 16) | (cy & 0xffff);
+    for (let i = 0; i < orbs.length; i++) {
+      const cx = Math.floor(orbs[i].pos.x / cellSize), cy = Math.floor(orbs[i].pos.y / cellSize);
+      const k = cellKey(cx, cy);
+      const cell = grid.get(k);
+      if (cell) cell.idx.push(i); else grid.set(k, { cx, cy, idx: [i] });
     }
     const mergedOrbs: typeof state.expOrbs = [];
-    const processed = new Set<number>();
-    for (const [key, indices] of grid) {
-      for (const i of indices) {
-        if (processed.has(i)) continue;
-        let currentOrb = { ...state.expOrbs[i] };
-        processed.add(i);
-        const [cx, cy] = key.split(',').map(Number);
+    const processed = new Uint8Array(orbs.length);
+    for (const cell of grid.values()) {
+      for (const i of cell.idx) {
+        if (processed[i]) continue;
+        const currentOrb = orbs[i]; // l'array vecchio viene scartato: si puo' modificare il cristallo invece di copiarlo
+        processed[i] = 1;
         for (let dx = -1; dx <= 1; dx++) {
           for (let dy = -1; dy <= 1; dy++) {
-            const neighborKey = `${cx + dx},${cy + dy}`;
-            const neighborIndices = grid.get(neighborKey);
-            if (!neighborIndices) continue;
-            for (const j of neighborIndices) {
-              if (processed.has(j) || j <= i) continue;
-              const otherOrb = state.expOrbs[j];
-              const distance = Math.hypot(currentOrb.pos.x - otherOrb.pos.x, currentOrb.pos.y - otherOrb.pos.y);
-              if (distance < mergeDistance) {
+            const neighbor = grid.get(cellKey(cell.cx + dx, cell.cy + dy));
+            if (!neighbor || neighbor.cx !== cell.cx + dx || neighbor.cy !== cell.cy + dy) continue;
+            for (const j of neighbor.idx) {
+              if (processed[j] || j <= i) continue;
+              const otherOrb = orbs[j];
+              const ox = currentOrb.pos.x - otherOrb.pos.x, oy = currentOrb.pos.y - otherOrb.pos.y;
+              if (ox * ox + oy * oy < mergeDistance * mergeDistance) {
                 currentOrb.value += otherOrb.value;
                 currentOrb.radius = Math.min(Math.sqrt(currentOrb.value) * 2, 15);
                 currentOrb.pos.x = (currentOrb.pos.x + otherOrb.pos.x) / 2;
                 currentOrb.pos.y = (currentOrb.pos.y + otherOrb.pos.y) / 2;
-                processed.add(j);
+                processed[j] = 1;
               }
             }
           }
@@ -1216,8 +1288,8 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.save(); ctx.translate(shakeX, shakeY);
-  ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, width, height);
-  drawNebulaBackground(ctx, camera, width, height);
+  // il fondo pieno serve solo finche' l'immagine dello sfondo non e' pronta (poi la copre tutta)
+  if (!drawNebulaBackground(ctx, camera, width, height)) { ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, width, height); }
   // stelle vicine in primo piano (parallasse piu' veloce dello sfondo = profondita')
   for (let i = 0; i < state.stars.length; i += 2) {
     const star = state.stars[i];
@@ -1232,10 +1304,15 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   ctx.save();
   if (isMobile) { ctx.translate(width / 2, height / 2); ctx.scale(scaleFactor, scaleFactor); ctx.translate(-width / 2, -height / 2); }
   ctx.translate(width / 2 - camera.x, height / 2 - camera.y);
+  // Si disegna solo cio' che e' sullo schermo: molti nemici e cristalli restano fuori campo
+  // (i nemici nascono oltre il bordo) e prima venivano disegnati lo stesso.
+  const viewHalfW = width / 2 / scaleFactor + 30, viewHalfH = height / 2 / scaleFactor + 30; // +30: scossa dello schermo
+  const inView = (x: number, y: number, margin: number) => Math.abs(x - camera.x) < viewHalfW + margin && Math.abs(y - camera.y) < viewHalfH + margin;
   // Cristalli di esperienza: alone + rombo luminoso (niente shadowBlur, costa poco)
   const orbPulse = 1 + Math.sin(state.time * 6) * 0.12;
   for (const orb of state.expOrbs) {
     const r = Math.max(4, orb.radius) * orbPulse;
+    if (!inView(orb.pos.x, orb.pos.y, r * 2.2)) continue;
     const big = orb.value >= 10;
     ctx.fillStyle = big ? 'rgba(168, 85, 247, 0.22)' : 'rgba(45, 212, 191, 0.2)';
     ctx.beginPath(); ctx.arc(orb.pos.x, orb.pos.y, r * 2.1, 0, Math.PI * 2); ctx.fill();
@@ -1252,9 +1329,12 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   ctx.fillStyle = 'rgba(0, 0, 8, 0.38)';
   for (const enemy of state.enemies) {
     const r = enemy.radius * (enemy.isBoss ? 1.05 : 1.15);
+    if (!inView(enemy.pos.x, enemy.pos.y, r * 1.6)) continue;
     ctx.beginPath(); ctx.ellipse(enemy.pos.x + r * 0.18, enemy.pos.y + r * 0.42, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill();
   }
   for (const enemy of state.enemies) {
+    // i boss restano sempre disegnati (aure e attacchi grandi); per gli altri basta un margine ampio
+    if (!enemy.isBoss && !inView(enemy.pos.x, enemy.pos.y, enemy.radius * 2.5 + 40)) { (enemy as { __lastHp?: number }).__lastHp = enemy.hp; continue; }
     ctx.save(); ctx.translate(enemy.pos.x, enemy.pos.y);
     ctx.fillStyle = enemy.color;
     if (enemy.isBoss) drawBossAura(ctx, enemy, state.time);
@@ -1422,7 +1502,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
   }
   ctx.restore();
   for (const proj of state.projectiles) { if (drawWeaponProjectile(ctx, proj, state)) continue; ctx.save(); ctx.translate(proj.pos.x, proj.pos.y); if (proj.type === 'boomerang_proj') { const rotation = state.time * 10; ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-proj.radius, 0); ctx.lineTo(0, -proj.radius * 0.6); ctx.lineTo(proj.radius, 0); ctx.stroke(); } else if (proj.type === 'antimatter_bomb_proj') { ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'quantum_bounce_proj') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = proj.color; ctx.beginPath(); ctx.moveTo(proj.radius * 1.5, 0); ctx.lineTo(0, -proj.radius); ctx.lineTo(-proj.radius * 1.5, 0); ctx.lineTo(0, proj.radius); ctx.closePath(); ctx.fill(); if (proj.bouncesLeft !== undefined && proj.maxBounces !== undefined) { ctx.fillStyle = '#ffffff'; ctx.font = 'bold 8px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(proj.bouncesLeft.toString(), 0, 0); } } else if (proj.type === 'boss_laser_big') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff0000'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.5, proj.radius, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.5, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'boss_laser_small') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#ff4444'; ctx.beginPath(); ctx.ellipse(0, 0, proj.radius * 1.2, proj.radius * 0.7, 0, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'acid_blob') { ctx.fillStyle = '#88ff00'; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); } else if (proj.type === 'tractor_beam') { const rotation = Math.atan2(proj.vel.y, proj.vel.x); ctx.rotate(rotation); ctx.fillStyle = '#00ff00'; ctx.fillRect(-proj.radius * 3, -proj.radius * 0.5, proj.radius * 3, proj.radius); ctx.fillStyle = '#88ff88'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.6, 0, Math.PI * 2); ctx.fill(); } else { if (proj.evolved) { const pulse = 1.6 + Math.sin(state.time * 12 + proj.pos.x * 0.05) * 0.25; ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = 'rgba(251, 191, 36, 0.75)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, proj.radius * pulse, 0, Math.PI * 2); ctx.stroke(); ctx.globalCompositeOperation = 'source-over'; } ctx.fillStyle = proj.color; ctx.beginPath(); ctx.arc(0, 0, proj.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.arc(0, 0, proj.radius * 0.45, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
-  for (const p of state.particles) { const alpha = p.life / p.maxLife; ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.size * alpha, 0, Math.PI * 2); ctx.fill(); }
+  for (const p of state.particles) { if (!inView(p.pos.x, p.pos.y, p.size + 4)) continue; const alpha = p.life / p.maxLife; ctx.fillStyle = p.color + Math.floor(alpha * 255).toString(16).padStart(2, '0'); ctx.beginPath(); ctx.arc(p.pos.x, p.pos.y, p.size * alpha, 0, Math.PI * 2); ctx.fill(); }
   if (showDamageNumbers) { for (const dmgNum of state.damageNumbers) { const alpha = dmgNum.lifetime / dmgNum.maxLifetime; const fontSize = dmgNum.isCrit ? 18 : 12; ctx.save(); ctx.globalAlpha = alpha; ctx.font = `bold ${fontSize}px monospace`; ctx.textAlign = 'center'; ctx.fillStyle = dmgNum.isCrit ? '#ffff00' : dmgNum.color; ctx.fillText(Math.floor(dmgNum.value).toString(), dmgNum.pos.x, dmgNum.pos.y); if (dmgNum.isCrit) { ctx.font = 'bold 9px monospace'; ctx.fillText('CRIT!', dmgNum.pos.x, dmgNum.pos.y - 12); } ctx.restore(); } }
   for (const nebula of state.nebulaPools) { if (nebula.kind) { drawSpecialPool(ctx, nebula, state); continue; } const alpha = 1 - (nebula.lifetime / nebula.maxLifetime); ctx.save(); ctx.globalAlpha = alpha * 0.5; const gradient = ctx.createRadialGradient(nebula.pos.x, nebula.pos.y, 0, nebula.pos.x, nebula.pos.y, nebula.radius); gradient.addColorStop(0, nebula.color + 'cc'); gradient.addColorStop(0.4, nebula.color + '88'); gradient.addColorStop(0.7, nebula.color + '44'); gradient.addColorStop(1, nebula.color + '00'); ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = alpha * 0.3; ctx.strokeStyle = nebula.color; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(nebula.pos.x, nebula.pos.y, nebula.radius * (0.8 + Math.sin(state.time * 5) * 0.1), 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = alpha * 0.4; for (let i = 0; i < 4; i++) { const angle = (i / 4) * Math.PI * 2 + state.time * 2; const dist = nebula.radius * 0.5; const px = nebula.pos.x + Math.cos(angle) * dist; const py = nebula.pos.y + Math.sin(angle) * dist; ctx.fillStyle = nebula.color; ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill(); } ctx.restore(); }
   for (const hitbox of state.stormHitboxes) { const alpha = 1 - (hitbox.lifetime / hitbox.maxLifetime); ctx.save(); ctx.translate(hitbox.pos.x, hitbox.pos.y); ctx.rotate(hitbox.rotation); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = hitbox.color; ctx.strokeStyle = hitbox.color; ctx.lineWidth = 2; if (hitbox.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, hitbox.radius, 0, Math.PI * 2); ctx.fill(); } else if (hitbox.shape === 'star') { ctx.beginPath(); for (let i = 0; i < 10; i++) { const ang = (i * Math.PI) / 5 - Math.PI / 2; const radius = i % 2 === 0 ? hitbox.radius : hitbox.radius * 0.5; const x = Math.cos(ang) * radius; const y = Math.sin(ang) * radius; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); } ctx.closePath(); ctx.fill(); } else if (hitbox.shape === 'square') { const size = hitbox.radius * 1.4; ctx.fillRect(-size / 2, -size / 2, size, size); } ctx.restore(); }
@@ -1450,7 +1530,7 @@ export function renderGame(ctx: CanvasRenderingContext2D, state: GameState, widt
       // Immagine dell'astronave (public/assets/ships). Se manca, si usa il disegno vettoriale qui sotto.
       const shipSize = r * 3.4;
       ctx.shadowColor = 'rgba(0, 200, 255, 0.35)'; ctx.shadowBlur = 12;
-      ctx.drawImage(shipSprite, -shipSize / 2, -shipSize / 2, shipSize, shipSize);
+      drawSprite(ctx, shipSprite, -shipSize / 2, -shipSize / 2, shipSize, shipSize);
       ctx.shadowBlur = 0;
     } else if (ship === 'fire_ship') {
       // G'quan Heavy Cruiser - corpo allungato con fiamme
@@ -1823,7 +1903,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       ctx.beginPath(); ctx.moveTo(18 * s, 0); ctx.lineTo(-10 * s, -13 * s); ctx.lineTo(-4 * s, 0); ctx.lineTo(-10 * s, 13 * s); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.restore();
       const icon = state.currentBossType ? getBossIcon(state.currentBossType) : null;
-      if (icon) { const isz = 30 * s; ctx.drawImage(icon, ax - Math.cos(a) * 30 * s - isz / 2, ay - Math.sin(a) * 30 * s - isz / 2, isz, isz); }
+      if (icon) { const isz = 30 * s; drawSprite(ctx, icon, ax - Math.cos(a) * 30 * s - isz / 2, ay - Math.sin(a) * 30 * s - isz / 2, isz, isz); }
     }
   }
 
@@ -1899,14 +1979,14 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     else if (state.currentBossType === 'boss_cosmic_horror') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(0, 20, 40, 0.9)'); bgGrad.addColorStop(0.5, 'rgba(0, 10, 30, 0.7)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.globalAlpha = alpha * 0.5; for (let i = 0; i < 10; i++) { const ex = bgX + 40 + Math.random() * (bgWidth - 80); const ey = bgY + 20 + Math.random() * (bgHeight - 40); const er = 4 + Math.random() * 8; ctx.fillStyle = '#ffff00'; ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(ex, ey, er * 0.4, 0, Math.PI * 2); ctx.fill(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ffff44'; ctx.font = 'bold italic 42px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 35; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.3; ctx.fillStyle = '#ff8800'; ctx.fillText(bossName, centerX + 3, centerY - 2); }
     else { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX, bgY + bgHeight); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.3, 'rgba(255, 0, 68, 0.3)'); bgGrad.addColorStop(0.5, 'rgba(255, 0, 68, 0.5)'); bgGrad.addColorStop(0.7, 'rgba(255, 0, 68, 0.3)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.fillStyle = '#ff0044'; ctx.font = 'bold 48px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff0044'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); }
     const bossIcon = getBossIcon(state.currentBossType);
-    if (bossIcon) { const iconSize = width < 768 ? 64 : 104; ctx.shadowColor = '#000000'; ctx.shadowBlur = 12; ctx.drawImage(bossIcon, bgX + 12, bgY + (bgHeight - iconSize) / 2, iconSize, iconSize); ctx.drawImage(bossIcon, bgX + bgWidth - 12 - iconSize, bgY + (bgHeight - iconSize) / 2, iconSize, iconSize); ctx.shadowBlur = 0; }
+    if (bossIcon) { const iconSize = width < 768 ? 64 : 104; ctx.shadowColor = '#000000'; ctx.shadowBlur = 12; drawSprite(ctx, bossIcon, bgX + 12, bgY + (bgHeight - iconSize) / 2, iconSize, iconSize); ctx.drawImage(bossIcon, bgX + bgWidth - 12 - iconSize, bgY + (bgHeight - iconSize) / 2, iconSize, iconSize); ctx.shadowBlur = 0; }
     ctx.restore();
   }
 }
 
 function drawAbilityIcon(ctx: CanvasRenderingContext2D, type: string, color: string, x: number, y: number, size: number) {
   const abilitySprite = getAbilitySprite(type);
-  if (abilitySprite) { ctx.drawImage(abilitySprite, x, y, size, size); return; }
+  if (abilitySprite) { drawSprite(ctx, abilitySprite, x, y, size, size); return; }
   ctx.save(); ctx.translate(x, y); const scale = size / 40; ctx.scale(scale, scale); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
   switch (type) {
     case 'photon_gun': case 'ion_gun': ctx.fillRect(8, 18, 12, 6); ctx.fillRect(20, 19, 8, 4); ctx.beginPath(); ctx.moveTo(28, 21); ctx.lineTo(36, 21); ctx.stroke(); break;
