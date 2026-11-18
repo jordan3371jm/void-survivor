@@ -298,6 +298,37 @@ export function createInitialState(shipType: ShipType = 'starter', gameMode: Gam
 // Livelli massimi: armi attive fino a 10; passive fino a 10 solo queste, le altre fino a 5;
 // le armi evolute ripartono da 1 e arrivano a 5 (vedi progression.ts).
 const PASSIVES_TO_10 = new Set<string>(['passive_fusion_core', 'passive_neutronium_heart', 'passive_kinetic_accelerator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_galactic_coin']);
+/** Statistiche comprate nel negozio (salute, difesa, critico, rigenerazione, velocita', fortuna, esperienza). */
+export interface ShopStats { maxHp?: number; attack?: number; shipSpeed?: number; defense?: number; regeneration?: number; luck?: number; expBonus?: number; critChance?: number; critDamage?: number; }
+
+/**
+ * Applica i potenziamenti del negozio alla nave e adatta la difficolta': con piu' vita i nemici colpiscono
+ * un po' piu' forte, con piu' velocita' i nemici normali sono un po' piu' veloci, con piu' critico hanno un po'
+ * piu' vita (vita x4 -> danno nemico x1,6; vita x6 -> x1,8).
+ * Senza potenziamenti tutto resta a 1.
+ */
+export function applyShopStats(state: GameState, st: ShopStats): void {
+  const p = state.player;
+  p.maxHp = st.maxHp || 100; p.hp = p.maxHp;
+  p.damage = st.attack || 10;
+  p.speed = st.shipSpeed || 200;
+  p.armor = st.defense || 0;
+  p.regenPerSecond = st.regeneration || 0;
+  p.luckBonus = (st.luck || 0) / 100;
+  p.expBonus = (st.expBonus || 0) / 100;
+  p.critChance = st.critChance || 0;
+  p.critDamage = st.critDamage || 150;
+  const hpGain = Math.max(1, p.maxHp / 100) * (1 + p.regenPerSecond * 0.12) * (1 + p.armor * 0.04);
+  const critGain = 1 + (Math.min(100, p.critChance) / 100) * Math.max(0, p.critDamage / 100 - 1);
+  // crescita logaritmica: compensa i primi potenziamenti e sempre meno i successivi,
+  // cosi' comprare di piu' rende sempre la nave piu' forte
+  state.shopScale = {
+    damage: 1 + 0.45 * Math.log(hpGain),
+    speed: 1 + 0.3 * Math.log(Math.max(1, p.speed / 200)),
+    hp: 1 + 0.3 * Math.log(critGain),
+  };
+}
+
 export function abilityMaxLevel(type: AbilityType): number {
   if (!type.startsWith('passive_')) return 10;
   return PASSIVES_TO_10.has(type) ? 10 : 5;
@@ -485,7 +516,10 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   if (bossStep > 0 && !type.startsWith('boss_')) { base.hp *= 1 + bossStep * 0.3; dmgMul *= 1 + bossStep * 0.15; }
   // Endless: finito il giro degli 8 boss, quelli successivi tornano sempre piu' forti
   if (type.startsWith('boss_') && state.gameMode === 'endless') { const cycle = Math.floor(Math.max(0, (state.bossSpawnCount || 1) - 1) / 8); if (cycle > 0) { base.hp *= 1 + cycle * 0.8; dmgMul *= 1 + cycle * 0.3; } }
-  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 36 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
+  // Difficolta' adattata ai potenziamenti del negozio: i potenziamenti aiutano sempre, ma non rendono la partita banale
+  const shop = state.shopScale;
+  const shopHp = shop ? shop.hp : 1, shopDmg = shop ? shop.damage : 1, shopSpd = shop && !base.isBoss && !type.startsWith('mini_') ? shop.speed : 1;
+  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul * shopHp, maxHp: base.hp * curseMul * shopHp, damage: (type.startsWith('boss_') ? 36 : type.includes('asteroid') ? 15 : 10) * dmgMul * shopDmg, type, speed: base.speed * curseMul * shopSpd, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
 }
 
 // Modalita' leggera (dispositivi lenti, vedi App.tsx): meno particelle e niente bagliori
