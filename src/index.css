@@ -128,7 +128,7 @@ html, body, #root {
   overscroll-behavior: none;
 }
 /* Solo html e body hanno lo sfondo: i contenitori del gioco restano trasparenti, altrimenti la
-   registrazione delle clip di Klyo (che ricompone la pagina) li disegna sopra il canvas */
+   registrazione delle clip (che ricompone la pagina) li disegna sopra il canvas */
 html, body { background: var(--bg); }
 
 body {
@@ -999,7 +999,7 @@ svg { flex-shrink: 0; }
 /* --------------------------------------------------------------------------
    PARTITA
    -------------------------------------------------------------------------- */
-.vs-game { position: fixed; inset: 0; overflow: hidden; z-index: 10; } /* sfondo trasparente: lo disegna il canvas (la registrazione delle clip di Klyo ricompone la pagina e uno sfondo pieno coprirebbe il gioco) */
+.vs-game { position: fixed; inset: 0; overflow: hidden; z-index: 10; } /* sfondo trasparente: lo disegna il canvas (la registrazione delle clip ricompone la pagina e uno sfondo pieno coprirebbe il gioco) */
 .vs-game-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .vs-pause-btn {
   position: absolute;
@@ -1286,7 +1286,7 @@ svg { flex-shrink: 0; }
 .vs-you { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; color: #04121a; background: var(--cyan); vertical-align: middle; }
 .vs-game-canvas:focus { outline: none; }
 
-/* Telefoni e tablet: ogni pulsante almeno 44 px (minimo di Apple, Google e Klyo per toccarlo bene) */
+/* Telefoni e tablet: ogni pulsante almeno 44 px (minimo di Apple e Google per toccarlo bene) */
 @media (pointer: coarse) {
   .vs-btn--sm, .vs-tab, .vs-profile-pill { min-height: 44px; }
   .vs-back { min-width: 44px; }

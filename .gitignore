@@ -12,3 +12,5 @@ __vid.html
 *.apk
 *.aab
 dist-app/
+dist/
+dist-klyo/

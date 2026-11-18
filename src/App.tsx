@@ -366,18 +366,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const saveDataToFirestore = async () => {
+    const saveDataOnline = async () => {
       if (store.userProfile && store.userProfile.id) {
         try {
           const { saveUserData } = await import('./game/auth');
           await saveUserData(store.userProfile.id, store);
         } catch (error: any) {
-          console.error('Errore salvataggio dati su Firestore:', error);
+          console.error('Errore salvataggio dati online:', error);
         }
       }
     };
 
-    const timeoutId = setTimeout(saveDataToFirestore, 1000);
+    const timeoutId = setTimeout(saveDataOnline, 1000);
     return () => clearTimeout(timeoutId);
   }, [store.coins, store.diamonds, store.points, store.stats, store.upgrades, store.abilityAttackLevels, store.ships, store.currentShip, store.userProfile?.highScores]);
 
@@ -563,7 +563,7 @@ export default function App() {
             if (pf.slow >= 2) { lowFxRef.current = true; resizeCanvas(); }
           }
         }
-        (state as any).lowFx = lowFxRef.current;
+        state.lowFx = lowFxRef.current;
         trackPerfFrame(rawMs, active);
 
         if (state.chestPending && !chestShownRef.current) {
@@ -889,7 +889,6 @@ export default function App() {
   useEffect(() => {
     if (screen !== 'playing') return undefined;
     const canvas = canvasRef.current;
-    if (canvas) playgama.registerCanvas(canvas);
     const MOVE_KEYS = new Set(['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ']);
 
     const handleKeyDown = (e: KeyboardEvent) => {

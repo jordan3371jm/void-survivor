@@ -55,6 +55,8 @@ export interface Player extends Entity {
 
 export interface Enemy extends Entity {
   type: EnemyType;
+  /** Boss Rush: soglia di vita sotto la quale il boss perde il prossimo cristallo di esperienza */
+  expDropHp?: number;
   /** mini boss: usa le mosse con preavviso dei boss, ma non ferma le ondate */
   isMini?: boolean;
   speed: number;
@@ -92,6 +94,8 @@ export interface Projectile extends Entity {
   maxBounces?: number;
   bouncesLeft?: number;
   lastHitEnemy?: string;
+  /** boomerang sulla via del ritorno */
+  returning?: boolean;
   color: string;
   trail?: Vector2[];
 }
@@ -174,6 +178,8 @@ export interface GravityWave {
 
 export interface NebulaPool {
   id: string;
+  /** creata da un'arma evoluta */
+  evo?: boolean;
   pos: Vector2;
   radius: number;
   damage: number;
@@ -375,7 +381,16 @@ export interface GameState {
   currentWave: number;
   currentScore: number;
   currentKills: number;
+  /** modalita' leggera (meno effetti) attivata da App quando gli fps calano */
+  lowFx?: boolean;
+  /** ultima ondata per cui si e' deciso l'evento speciale */
+  eventWave?: number;
+  /** sciami annunciati che entrano in scena al tempo `at` */
+  pendingSwarms?: PendingSwarm[];
+  /** scritta dell'evento in corso (sciame, mini boss) */
+  eventBanner?: { text: string; t: number } | null;
 }
+export interface PendingSwarm { at: number; a: number; n: number; }
 export interface Pickup {
   id: string;
   type: 'heart' | 'magnet' | 'chest';
