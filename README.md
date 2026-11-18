@@ -18,7 +18,8 @@ La build usa percorsi relativi: il contenuto di `dist/` si può caricare così c
 `npm run build` prima di pubblicare.
 
 Il gioco usa ovunque (web, Playgama, app) nomi senza marchi registrati e la musica libera CC0
-(`public/audio/bgm-free.mp3`). Account e salvataggi online passano solo da Playgama Bridge;
+(`public/audio/bgm-free.mp3`). Gli effetti sonori (`public/audio/sfx/`) vengono dai pacchetti
+"Sci-Fi Sounds" e "Digital SFX" di [Kenney](https://www.kenney.nl), licenza CC0. Account e salvataggi online passano solo da Playgama Bridge;
 fuori da Playgama i progressi restano sul dispositivo.
 
 Immagini promozionali (16:9 e 9:16) nella cartella `promo/`.
@@ -29,7 +30,8 @@ Immagini promozionali (16:9 e 9:16) nella cartella `promo/`.
 index.html              pagina, schermata di caricamento, Playgama Bridge
 public/                 immagini (navi, nemici, boss, abilità) e config Playgama
 src/main.tsx            avvio (Bridge + salvataggi, poi il gioco)
-src/App.tsx             interfaccia: home, modalità, astronavi, potenziamenti, impostazioni, partita
+src/App.tsx             interfaccia: home, modalità, astronavi, potenziamenti, partita
+src/ui/                 catalogo del negozio, componenti condivisi, schermata impostazioni
 src/index.css           grafica (design system, responsive PC / telefono)
 src/game/engine.ts      motore di gioco e HUD
 src/game/spatial.ts     griglia spaziale per le collisioni proiettili-nemici

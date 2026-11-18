@@ -1116,7 +1116,6 @@ export function updateGame(state: GameState, dt: number): void {
           state.gameOver = true;
           state.victory = true;
           state.score += 10000; // Bonus vittoria
-          console.log('[Game] 🏆 Vittoria! Hai completato la modalità normale!');
         }
         
         // Assorbi tutta l'EXP presente sul campo quando muore un boss

@@ -3,19 +3,6 @@ import { UserProfile } from './store';
 
 // Funzione per controllare e completare gli obiettivi
 export function checkAndCompleteAchievements(profile: UserProfile, speedBoostTimer: number = 0): UserProfile {
-  console.log('[Achievements] 🔍 Controllo obiettivi iniziato...');
-  console.log('[Achievements] Profilo:', {
-    currentKills: profile.currentKills,
-    currentPlayTime: profile.currentPlayTime,
-    currentLevel: profile.currentLevel,
-    currentScore: profile.currentScore,
-    currentWave: profile.currentWave,
-    totalKills: profile.totalKills,
-    totalBossesDefeated: profile.totalBossesDefeated,
-    totalPlayTime: profile.totalPlayTime,
-    totalGamesPlayed: profile.totalGamesPlayed,
-    speedBoostTimer: speedBoostTimer
-  });
 
   // Calcola le statistiche del giocatore
   const stats: AchievementStats = {
@@ -39,22 +26,15 @@ export function checkAndCompleteAchievements(profile: UserProfile, speedBoostTim
     currentSpeedBoostTimer: speedBoostTimer
   };
 
-  console.log('[Achievements] 📊 Statistiche calcolate:', stats);
-
   // Inizializza completedAchievements se non esiste
   if (!profile.completedAchievements) {
     profile.completedAchievements = [];
-    console.log('[Achievements] 📝 Inizializzati completedAchievements');
   }
-
-  let hasChanges = false;
 
   // Controlla ogni obiettivo
   achievements.forEach(achievement => {
     const current = achievement.check(stats);
     const isAlreadyCompleted = profile.completedAchievements?.some((c: CompletedAchievement) => c.id === achievement.id);
-
-    console.log(`[Achievements] 🔎 ${achievement.name}: ${current}/${achievement.target} (completato: ${isAlreadyCompleted})`);
 
     if (current >= achievement.target && !isAlreadyCompleted) {
       profile.completedAchievements!.push({
@@ -62,16 +42,8 @@ export function checkAndCompleteAchievements(profile: UserProfile, speedBoostTim
         completedAt: Date.now(),
         claimed: false
       });
-      hasChanges = true;
-      console.log(`[Achievements] ✅ Obiettivo completato: ${achievement.name} (${current}/${achievement.target})`);
     }
   });
-
-  if (hasChanges) {
-    console.log(`[Achievements] 🎉 ${profile.completedAchievements!.length} obiettivi completati in totale`);
-  } else {
-    console.log('[Achievements] ⚠️ Nessun nuovo obiettivo completato');
-  }
 
   return profile;
 }
