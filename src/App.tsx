@@ -12,6 +12,7 @@ import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
 import { getLoginRewardsState, hasUnclaimedReward } from './game/loginRewards';
 import { AbilityIcon } from './components/abilityIcon';
+import { Avatar, DEFAULT_AVATAR } from './components/avatar';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
@@ -315,7 +316,7 @@ export default function App() {
             const userId = user.uid || user.id;
             const userEmail = user.email || '';
             const userName = user.displayName || user.user_metadata?.username || user.user_metadata?.full_name || 'Player';
-            const userAvatar = user.photoURL || user.user_metadata?.avatar_url || '👤';
+            const userAvatar = user.photoURL || user.user_metadata?.avatar_url || DEFAULT_AVATAR;
             const userData = await auth.loadUserData(userId);
 
             if (userData) {
@@ -474,7 +475,7 @@ export default function App() {
       diamonds: storeRef.current.diamonds + state.diamondsEarned,
       points: storeRef.current.points + state.player.points,
     };
-    if (!ns.userProfile) ns = { ...ns, userProfile: createUserProfile('local@player.com', 'Giocatore Locale', '🎮') };
+    if (!ns.userProfile) ns = { ...ns, userProfile: createUserProfile('local@player.com', 'Giocatore Locale', DEFAULT_AVATAR) };
     ns = addHighScore(ns, score, state.kills, state.time, state.player.level);
 
     const p = ns.userProfile!;
@@ -1155,7 +1156,7 @@ export default function App() {
       <div className="vs-screen vs-screen--home">
         <header className="vs-home-top">
           <button type="button" className="vs-profile-pill" onClick={() => setShowProfileModal(true)}>
-            <span className="vs-profile-avatar">{store.userProfile?.avatar && !store.userProfile.avatar.startsWith('http') && !store.userProfile.avatar.startsWith('data:') ? store.userProfile.avatar : <UserRound size={18} />}</span>
+            <Avatar value={store.userProfile?.avatar} size={28} className="vs-profile-avatar" />
             <span className="vs-profile-name">{store.userProfile?.name && store.userProfile.name !== 'Giocatore Locale' ? store.userProfile.name : L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员')}</span>
           </button>
           <div className="vs-home-top-right">

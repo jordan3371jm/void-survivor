@@ -5,29 +5,22 @@ import { t, Language } from './game/i18n';
 import { plFromEn } from './game/pl';
 import { getAbilityInfo } from './game/abilityInfo';
 import { AbilityIcon } from './components/abilityIcon';
+import { Avatar, AVATAR_SHIPS, DEFAULT_AVATAR } from './components/avatar';
+import { ShipIcon } from './components/shipIcon';
 import { authorizePlatformPlayer, fetchGlobalLeaderboard, getLeaderboardKind, getPlatformPlayer, GlobalEntry, showNativeLeaderboard } from './game/bridge';
 
 const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
 const clean = (s: string) => s.replace(/^[\p{Extended_Pictographic}️☀-➿\s]+/u, '').replace(/[\s\p{Extended_Pictographic}️☀-➿]+$/u, '').trim();
 const int = (n: number | undefined) => String(Math.round(n || 0));
 const fmtTime = (s: number) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`; };
-const AVATARS = ['🚀', '👽', '🛸', '🤖', '🌌', '☄️', '🪐', '👾', '🌟', '🦾'];
 
-function Avatar({ value, size = 84 }: { value?: string; size?: number }) {
-  const isImg = !!value && (value.startsWith('data:image') || value.startsWith('http'));
-  return (
-    <span className="vs-avatar" style={{ width: size, height: size, fontSize: size * 0.5 }}>
-      {isImg ? <img src={value} alt="" /> : value || <User size={size * 0.5} />}
-    </span>
-  );
-}
 
 interface ProfileModalProps { store: GameStore; setStore: (store: GameStore) => void; lang: Language; onClose: () => void; }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ store, setStore, lang, onClose }) => {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
-  const profile = store.userProfile || createUserProfile('local@player.com', L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员'), '🚀');
+  const profile = store.userProfile || createUserProfile('local@player.com', L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员'), DEFAULT_AVATAR);
   const [name, setName] = useState(profile.name === 'Giocatore Locale' ? '' : profile.name);
   const platform = getPlatformPlayer();
 
@@ -81,7 +74,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ store, setStore, lan
               <button type="button" className="vs-pf-name" onClick={() => setEditing(true)}>{profile.name === 'Giocatore Locale' ? L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员') : profile.name}<Pencil size={14} /></button>
             )}
             <div className="vs-avatar-pick">
-              {AVATARS.map(a => <button key={a} type="button" className={profile.avatar === a ? 'is-active' : ''} onClick={() => update({ avatar: a })}>{a}</button>)}
+              {AVATAR_SHIPS.map(sh => { const a = `ship:${sh}`; return <button key={a} type="button" className={profile.avatar === a ? 'is-active' : ''} onClick={() => update({ avatar: a })}><ShipIcon shipType={sh} color="#62f5cf" size={34} /></button>; })}
             </div>
           </div>
         </div>

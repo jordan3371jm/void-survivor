@@ -345,79 +345,95 @@ export function stopBackgroundMusic() {
 
 
 
+// ---------------------------------------------------------------------------
+// Effetti sonori registrati (public/audio/sfx/*.mp3): pacchetti "Sci-Fi Sounds" e "Digital SFX" di Kenney,
+// licenza CC0. Prima i suoni erano generati nel codice con oscillatori, che Playgama non accetta (regola 3.3.2).
+// I file si scaricano una volta sola al primo avvio dell'audio e si suonano con Web Audio (leggero e preciso).
+// ---------------------------------------------------------------------------
+const SFX_BASE = `${import.meta.env.BASE_URL || '/'}audio/sfx/`;
+const sampleBuffers: Record<string, AudioBuffer> = {};
+let samplesRequested = false;
+let activeVoices = 0;
+const MAX_VOICES = 24; // con tantissimi colpi insieme si saltano i suoni in piu' invece di saturare l'audio
+
+/** [file, volume] per ogni suono del gioco (volumi bilanciati sul volume medio di ciascun file). */
+const SHOOT_SOUNDS: Record<string, [string, number]> = {
+  laser: ['laser', 0.32], explosion: ['explosion', 0.3], levelup: ['levelup', 0.5], hit: ['player_hit', 0.55],
+  photon_gun: ['photon', 0.22], ion_gun: ['ion', 0.2], drone_swarm: ['drone', 0.18], gravity_waves: ['wave', 0.3],
+  void_lance: ['lance', 0.4], cryo_lance: ['cryo', 0.26], energy_shield: ['shield', 0.32], laser_swords: ['sword', 0.16],
+  homing_laser: ['homing', 0.24], kinetic_darts: ['darts', 0.24], meteor: ['meteor', 0.34], neutronium_boomerang: ['boomerang', 0.2],
+  plasma_flamethrower: ['flame', 0.3], gravity_field: ['field', 0.28], corrosive_nebula: ['slime', 0.5], quantum_bounce: ['bounce', 0.26],
+  ion_storm: ['storm', 0.3], stellar_blackhole: ['blackhole', 0.36], probe_x: ['probe_x', 0.28], probe_y: ['probe_y', 0.28],
+  antimatter_bomb: ['bomb', 0.34], orbiting_satellites: ['satellite', 0.2], asteroid_fragment: ['rock', 0.5], prism_ray: ['prism', 0.3],
+  prism_split: ['prism_split', 0.14], arc_slash: ['arc', 0.28],
+  boss_charge: ['boss_charge', 0.4], boss_beam: ['boss_beam', 0.5], boss_roar: ['boss_roar', 0.45], boss_slam: ['boss_slam', 0.42],
+  boss_bolt: ['boss_bolt', 0.24], acid: ['acid', 0.55],
+};
+const ALL_SAMPLES = Array.from(new Set([
+  ...Object.values(SHOOT_SOUNDS).map(([f]) => f), 'passive', 'impact_a', 'impact_b', 'impact_c', 'impact_d',
+]));
+
+function decode(ctx: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+  // Safari vecchi accettano solo la forma con callback
+  return new Promise((resolve, reject) => {
+    const r = ctx.decodeAudioData(data, resolve, reject) as unknown as Promise<AudioBuffer> | undefined;
+    if (r && typeof r.then === 'function') r.then(resolve, reject);
+  });
+}
+
+/** Scarica e decodifica gli effetti sonori (una volta sola, in parallelo). */
+function loadSamples(ctx: AudioContext): void {
+  if (samplesRequested || typeof fetch === 'undefined') return;
+  samplesRequested = true;
+  for (const name of ALL_SAMPLES) {
+    fetch(`${SFX_BASE}${name}.mp3`)
+      .then(r => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then(buf => decode(ctx, buf))
+      .then(b => { sampleBuffers[name] = b; })
+      .catch(() => { /* suono mancante: si salta */ });
+  }
+}
+
+/** Suona un effetto: volume relativo e lieve variazione di altezza per non sentire sempre lo stesso colpo. */
+function playSample(name: string, volume: number, rate = 1): void {
+  if (sfxVolume <= 0 || audioUnavailable) return;
+  const ctx = getAudioContext();
+  loadSamples(ctx);
+  if (ctx.state !== 'running' || activeVoices >= MAX_VOICES) return;
+  const buffer = sampleBuffers[name];
+  if (!buffer) return;
+  const src = ctx.createBufferSource();
+  const gain = ctx.createGain();
+  src.buffer = buffer;
+  src.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+  gain.gain.value = volume * sfxVolume;
+  src.connect(gain); gain.connect(ctx.destination);
+  activeVoices++;
+  src.onended = () => { activeVoices = Math.max(0, activeVoices - 1); try { gain.disconnect(); } catch { /* ignora */ } };
+  src.start();
+}
+
 export function playShoot(type: string = 'laser') {
   try {
     if (sfxVolume <= 0 || audioUnavailable) return;
     const ctx = getAudioContext();
-    if (ctx.state !== 'running') return;
-    // Limita i suoni identici ravvicinati: con tanti nemici centinaia di oscillatori al secondo bloccavano l'audio sui telefoni
+    // Limita i suoni identici ravvicinati: con tanti nemici centinaia di suoni al secondo bloccavano l'audio sui telefoni
     const now = ctx.currentTime;
     if (now - (lastSfxAt[type] ?? -1) < 0.045) return;
     lastSfxAt[type] = now;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    switch (type) {
-      case 'laser': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.05 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-      case 'explosion': osc.type = 'square'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.08 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3); break;
-      case 'levelup': osc.type = 'sine'; osc.frequency.setValueAtTime(400, ctx.currentTime); osc.frequency.setValueAtTime(600, ctx.currentTime + 0.1); osc.frequency.setValueAtTime(800, ctx.currentTime + 0.2); gain.gain.setValueAtTime(0.1 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4); break;
-      case 'hit': osc.type = 'triangle'; osc.frequency.setValueAtTime(300, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.05); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.05); break;
-      case 'photon_gun': osc.type = 'square'; osc.frequency.setValueAtTime(1200, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.08); break;
-      case 'ion_gun': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(600, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
-      case 'drone_swarm': osc.type = 'triangle'; osc.frequency.setValueAtTime(500, ctx.currentTime); osc.frequency.setValueAtTime(700, ctx.currentTime + 0.05); osc.frequency.setValueAtTime(500, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15); break;
-      case 'gravity_waves': osc.type = 'sine'; osc.frequency.setValueAtTime(100, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.4); gain.gain.setValueAtTime(0.06 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4); break;
-      case 'void_lance': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(180, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1100, ctx.currentTime + 0.16); gain.gain.setValueAtTime(0.045 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.16); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.16); break;
-      case 'cryo_lance': osc.type = 'sine'; osc.frequency.setValueAtTime(2000, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.15); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15); break;
-      case 'energy_shield': osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime); osc.frequency.setValueAtTime(1000, ctx.currentTime + 0.05); osc.frequency.setValueAtTime(800, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15); break;
-      case 'laser_swords': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.05); gain.gain.setValueAtTime(0.05 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-      case 'homing_laser': osc.type = 'square'; osc.frequency.setValueAtTime(1000, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-      case 'kinetic_darts': osc.type = 'triangle'; osc.frequency.setValueAtTime(900, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.06); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.06); break;
-      case 'meteor': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.5); gain.gain.setValueAtTime(0.07 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5); break;
-      case 'neutronium_boomerang': osc.type = 'sine'; osc.frequency.setValueAtTime(600, ctx.currentTime); osc.frequency.setValueAtTime(800, ctx.currentTime + 0.1); osc.frequency.setValueAtTime(600, ctx.currentTime + 0.2); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25); break;
-      case 'plasma_flamethrower': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(140, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.28); gain.gain.setValueAtTime(0.035 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.28); break;
-      case 'gravity_field': osc.type = 'sine'; osc.frequency.setValueAtTime(150, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3); break;
-      case 'corrosive_nebula': osc.type = 'triangle'; osc.frequency.setValueAtTime(250, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.25); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25); break;
-      case 'quantum_bounce': osc.type = 'square'; osc.frequency.setValueAtTime(1500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.08); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.08); break;
-      case 'ion_storm': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(2000, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3); gain.gain.setValueAtTime(0.06 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3); break;
-      case 'stellar_blackhole': osc.type = 'sine'; osc.frequency.setValueAtTime(260, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(38, ctx.currentTime + 0.7); gain.gain.setValueAtTime(0.09 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.7); break;
-      case 'probe_x': osc.type = 'triangle'; osc.frequency.setValueAtTime(1500, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(2200, ctx.currentTime + 0.05); osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.025 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
-      case 'probe_y': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(420, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(260, ctx.currentTime + 0.05); osc.frequency.exponentialRampToValueAtTime(520, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.022 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
-      case 'antimatter_bomb': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(400, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.6); gain.gain.setValueAtTime(0.08 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6); break;
-      case 'orbiting_satellites': osc.type = 'triangle'; osc.frequency.setValueAtTime(700, ctx.currentTime); osc.frequency.setValueAtTime(900, ctx.currentTime + 0.05); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-      case 'asteroid_fragment': osc.type = 'triangle'; osc.frequency.setValueAtTime(350, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-      case 'prism_ray': osc.type = 'sine'; osc.frequency.setValueAtTime(1600, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(3200, ctx.currentTime + 0.14); gain.gain.setValueAtTime(0.035 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.14); break;
-      case 'prism_split': osc.type = 'triangle'; osc.frequency.setValueAtTime(2600, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(1300, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
-      case 'arc_slash': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(950, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.13); gain.gain.setValueAtTime(0.04 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.13); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.13); break;
-      // --- suoni dei boss ---
-      case 'boss_charge': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(90, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 1.1); gain.gain.setValueAtTime(0.0001, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.06 * sfxVolume, ctx.currentTime + 1.0); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.2); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 1.2); break;
-      case 'boss_beam': osc.type = 'square'; osc.frequency.setValueAtTime(70, ctx.currentTime); osc.frequency.linearRampToValueAtTime(55, ctx.currentTime + 1.0); gain.gain.setValueAtTime(0.09 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 1.1); break;
-      case 'boss_roar': osc.type = 'sawtooth'; osc.frequency.setValueAtTime(160, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.8); gain.gain.setValueAtTime(0.11 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.85); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.85); break;
-      case 'boss_slam': osc.type = 'triangle'; osc.frequency.setValueAtTime(120, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(30, ctx.currentTime + 0.35); gain.gain.setValueAtTime(0.14 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4); break;
-      case 'boss_bolt': osc.type = 'square'; osc.frequency.setValueAtTime(520, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(140, ctx.currentTime + 0.12); gain.gain.setValueAtTime(0.035 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.12); break;
-      case 'acid': osc.type = 'sine'; osc.frequency.setValueAtTime(300, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.08); osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.25); gain.gain.setValueAtTime(0.05 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25); break;
-      default: osc.type = 'sine'; osc.frequency.setValueAtTime(440, ctx.currentTime); osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.1); gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1); osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1); break;
-    }
-  } catch (e) {}
+    const def = SHOOT_SOUNDS[type] || SHOOT_SOUNDS.laser;
+    playSample(def[0], def[1]);
+  } catch { /* audio non disponibile */ }
 }
 
-export function playPassiveSound(type: string) {
-  try {
-    if (sfxVolume <= 0 || audioUnavailable) return;
-    const ctx = getAudioContext();
-    if (ctx.state !== 'running') return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.type = 'sine'; osc.frequency.setValueAtTime(440, ctx.currentTime);
-    gain.gain.setValueAtTime(0.03 * sfxVolume, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-    osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.1);
-  } catch (e) {}
+export function playPassiveSound(_type: string) {
+  try { playSample('passive', 0.18); } catch { /* audio non disponibile */ }
 }
 
 export function resumeAudio() {
   try {
     const ctx = getAudioContext();
+    loadSamples(ctx); // al primo tocco/tasto si scaricano gli effetti sonori
     if (ctx.state === 'suspended') {
       ctx.resume().catch(e => console.error('Errore resume:', e));
     }
@@ -442,21 +458,21 @@ export function setAudioPaused(paused: boolean) {
 }
 
 // ---------------------------------------------------------------------------
-// Suoni di impatto: ogni arma ha il suo "colpo a segno" (timbro, altezza, durata)
+// Suoni di impatto: ogni arma ha il suo "colpo a segno" (impatto, volume e altezza diversi)
 // ---------------------------------------------------------------------------
-type HitDef = [OscillatorType, number, number, number, number]; // forma, freq. iniziale, freq. finale, durata, volume
+type HitDef = [string, number, number]; // file, volume, altezza (playbackRate)
 const HIT_SOUNDS: Record<string, HitDef> = {
-  homing_laser: ['square', 1400, 600, 0.05, 0.025], photon_gun: ['square', 1700, 900, 0.04, 0.022],
-  ion_gun: ['sawtooth', 900, 300, 0.06, 0.022], drone_swarm: ['triangle', 1200, 800, 0.03, 0.02],
-  gravity_waves: ['sine', 160, 80, 0.12, 0.04], void_lance: ['sawtooth', 520, 140, 0.08, 0.03],
-  cryo_lance: ['sine', 2600, 1600, 0.06, 0.02], energy_shield: ['sine', 900, 1300, 0.07, 0.03],
-  asteroid_fragment: ['triangle', 220, 90, 0.07, 0.035], antimatter_bomb: ['sawtooth', 200, 60, 0.12, 0.03],
-  laser_swords: ['sawtooth', 700, 1000, 0.04, 0.018], kinetic_darts: ['triangle', 1500, 700, 0.03, 0.022],
-  meteor: ['square', 140, 50, 0.14, 0.04], neutronium_boomerang: ['triangle', 600, 1000, 0.05, 0.025],
-  orbiting_satellites: ['triangle', 1000, 700, 0.03, 0.018], plasma_flamethrower: ['sawtooth', 300, 180, 0.07, 0.022],
-  gravity_field: ['sine', 220, 160, 0.06, 0.015], corrosive_nebula: ['sine', 420, 260, 0.06, 0.015],
-  quantum_bounce: ['square', 2000, 1200, 0.04, 0.022], ion_storm: ['sawtooth', 2400, 400, 0.06, 0.025],
-  stellar_blackhole: ['sine', 90, 40, 0.3, 0.05], probe_x: ['square', 380, 120, 0.09, 0.03], probe_y: ['square', 300, 100, 0.09, 0.03],
+  homing_laser: ['impact_d', 0.08, 1.3], photon_gun: ['impact_d', 0.07, 1.5],
+  ion_gun: ['impact_a', 0.12, 1.2], drone_swarm: ['impact_d', 0.06, 1.6],
+  gravity_waves: ['impact_b', 0.16, 0.7], void_lance: ['impact_a', 0.16, 0.9],
+  cryo_lance: ['impact_c', 0.14, 1.6], energy_shield: ['impact_b', 0.14, 1.2],
+  asteroid_fragment: ['impact_a', 0.18, 0.8], antimatter_bomb: ['impact_b', 0.16, 0.6],
+  laser_swords: ['impact_c', 0.1, 1.4], kinetic_darts: ['impact_c', 0.12, 1.5],
+  meteor: ['impact_a', 0.2, 0.6], neutronium_boomerang: ['impact_b', 0.12, 1.3],
+  orbiting_satellites: ['impact_c', 0.09, 1.3], plasma_flamethrower: ['impact_a', 0.08, 1.1],
+  gravity_field: ['impact_b', 0.07, 0.9], corrosive_nebula: ['impact_c', 0.07, 0.8],
+  quantum_bounce: ['impact_d', 0.08, 1.8], ion_storm: ['impact_d', 0.09, 1.2],
+  stellar_blackhole: ['impact_b', 0.18, 0.5], probe_x: ['impact_a', 0.14, 1.0], probe_y: ['impact_a', 0.14, 0.9],
 };
 const lastHitAt: Record<string, number> = {};
 
@@ -466,16 +482,9 @@ export function playHit(type: string) {
   if (!def || sfxVolume <= 0 || audioUnavailable) return;
   try {
     const ctx = getAudioContext();
-    if (ctx.state !== 'running') return;
     const now = ctx.currentTime;
     if (now - (lastHitAt[type] ?? -1) < 0.07) return;
     lastHitAt[type] = now;
-    const [wave, f0, f1, dur, vol] = def;
-    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-    osc.type = wave; osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.setValueAtTime(f0, now); osc.frequency.exponentialRampToValueAtTime(Math.max(20, f1), now + dur);
-    gain.gain.setValueAtTime(vol * sfxVolume, now); gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-    osc.start(now); osc.stop(now + dur + 0.01);
+    playSample(def[0], def[1], def[2]);
   } catch { /* audio non disponibile */ }
 }
-

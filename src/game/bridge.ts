@@ -105,7 +105,7 @@ export async function bridgeGetLeaderboard(limit: number = 100): Promise<any[]> 
       playerName: score.playerName,
       score: score.score,
       rank: index + 1,
-      photo: '👤',
+      photo: '',
       createdAt: score.createdAt
     }));
   
@@ -126,7 +126,7 @@ export async function bridgeGetLeaderboard(limit: number = 100): Promise<any[]> 
         playerName: entry.name || 'Player',
         score: entry.score || 0,
         rank: entry.rank || index + 1,
-        photo: entry.photo || '👤',
+        photo: entry.photo || '',
         createdAt: new Date().toISOString()
       }));
     
@@ -165,7 +165,7 @@ export async function bridgeGetUserScores(userId: string): Promise<any[]> {
       time: score.time,
       level: score.level,
       rank: index + 1,
-      photo: '👤',
+      photo: '',
       createdAt: score.createdAt
     }));
   
@@ -186,7 +186,7 @@ export async function bridgeGetUserScores(userId: string): Promise<any[]> {
         playerName: entry.name || 'Player',
         score: entry.score || 0,
         rank: entry.rank || index + 1,
-        photo: entry.photo || '👤',
+        photo: entry.photo || '',
         createdAt: new Date().toISOString()
       }));
     
