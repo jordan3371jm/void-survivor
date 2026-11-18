@@ -367,8 +367,10 @@ const BOSS_MOVES: Partial<Record<EnemyType, Move[]>> = {
       // 3 varchi uguali e alla stessa distanza (120 gradi); ogni anello successivo ruota di poco,
       // cosi' basta spostarsi un po' per passare dal varco di un anello a quello del successivo
       const n = c.enraged ? 4 : 3;
-      const base = Math.random() * TAU; const turn = Math.random() < 0.5 ? 0.45 : -0.45;
-      for (let i = 0; i < n; i++) c.at(i * 0.75, () => { shockRing(c, 240, 24, 0.75, '#41f2a6', 'eldritch', base + i * turn, 3); playShoot('gravity_waves'); });
+      // varchi piu' larghi, rotazione piu' lenta e danno ridotto: era di gran lunga l'attacco che uccideva di piu'
+      // (nelle partite simulate quasi tutto il danno subito contro Cthulhu veniva da qui)
+      const base = Math.random() * TAU; const turn = Math.random() < 0.5 ? 0.3 : -0.3;
+      for (let i = 0; i < n; i++) c.at(i * 0.75, () => { const r = shockRing(c, 240, 24, 1.0, '#41f2a6', 'eldritch', base + i * turn, 3); r.damage = c.dmg * 0.7; playShoot('gravity_waves'); });
       return n * 0.75 + 0.6;
     } },
     { id: 'eyes', weight: 2, run: c => {

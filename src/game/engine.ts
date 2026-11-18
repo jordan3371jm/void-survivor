@@ -454,16 +454,17 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     mini_warden: { radius: 40, hp: 1100, speed: 45, expValue: 80, color: '#d08cff', pattern: 'boss' },
     mini_reaper: { radius: 40, hp: 2000, speed: 65, expValue: 100, color: '#ff5577', pattern: 'boss' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 2300 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
-    boss_cthulhu: { radius: 90, hp: 6000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
-    boss_borg_cube: { radius: 85, hp: 15000 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
-    boss_space_kraken: { radius: 95, hp: 20000 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
-    boss_galaxy_devourer: { radius: 100, hp: 30000 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
-    boss_void_emperor: { radius: 88, hp: 40000 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
-    boss_cosmic_horror: { radius: 92, hp: 50000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
+    boss_xenomorph: { radius: 70, hp: 1900 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_cthulhu: { radius: 90, hp: 3200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
+    boss_borg_cube: { radius: 85, hp: 4800 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
+    boss_space_kraken: { radius: 95, hp: 6300 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
+    boss_galaxy_devourer: { radius: 100, hp: 7800 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
+    boss_void_emperor: { radius: 88, hp: 9500 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
+    boss_cosmic_horror: { radius: 92, hp: 12000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
   };
   const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
-  // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
+  // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute).
+  // Vita di base piu' dolce da un boss all'altro (prima 1.000 -> 50.000: dal terzo boss gli scontri duravano minuti)
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
   // Boss Rush: stessa vita della modalita' normale (senza la crescita col tempo), un po' piu' bassa
@@ -776,6 +777,10 @@ function processAbilities(state: GameState, dt: number): void {
   }
 }
 
+/** Dopo quanti secondi di scontro il boss comincia a indebolirsi, e quanta vita perde al secondo (frazione). */
+const BOSS_FATIGUE_AFTER = 75;
+const BOSS_FATIGUE_RATE = 0.004;
+
 /** Ordine dei boss (Boss Rush, normale ed endless) */
 const BOSS_ORDER: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
 
@@ -929,6 +934,15 @@ function updateEnemies(state: GameState, gameDt: number): void {
       case 'swarm': enemy.vel.x = toPlayer.x * enemy.speed + (Math.random() - 0.5) * 50; enemy.vel.y = toPlayer.y * enemy.speed + (Math.random() - 0.5) * 50; break;
       case 'boss': {
         enemy.phaseTimer = (enemy.phaseTimer || 0) + gameDt;
+        // Fatica: dopo 75 s di scontro il boss perde da solo lo 0,4% della vita al secondo,
+        // cosi' nessuno scontro dura all'infinito (prima un boss poteva richiedere 10 minuti)
+        if (enemy.isBoss) {
+          enemy.fightTime = (enemy.fightTime || 0) + gameDt;
+          if (enemy.fightTime > BOSS_FATIGUE_AFTER) {
+            if (!enemy.fatigueAnnounced) { enemy.fatigueAnnounced = true; state.eventBanner = { text: 'boss_weak', t: 3 }; }
+            enemy.hp -= enemy.maxHp * BOSS_FATIGUE_RATE * gameDt;
+          }
+        }
         updateBoss(state, enemy, gameDt, toPlayer);
         // Boss Rush: senza nemici normali non si guadagnava esperienza (si restava a livello 1 con una sola arma).
         // Ora il boss perde cristalli di esperienza ogni 5% di salute persa.
@@ -1948,8 +1962,13 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       mini_warden: L5('GUARDIANO', 'WARDEN', 'GUARDIÁN', 'GARDIEN', '守望者'), mini_reaper: L5('MIETITORE', 'REAPER', 'SEGADOR', 'FAUCHEUR', '收割者'),
     };
     const isSwarm = ev.text === 'swarm';
-    const title = isSwarm ? L5('SCIAME IN ARRIVO!', 'SWARM INCOMING!', '¡LLEGA UN ENJAMBRE!', 'ESSAIM EN APPROCHE !', '虫群来袭！') : L5('MINI BOSS', 'MINI BOSS', 'MINI JEFE', 'MINI BOSS', '小头目');
-    const sub = isSwarm ? L5('Tantissimi nemici deboli', 'Tons of weak enemies', 'Muchísimos enemigos débiles', "Plein d'ennemis faibles", '大量弱小敌人') : (MINI[ev.text] || '');
+    const isWeak = ev.text === 'boss_weak';
+    const title = isSwarm ? L5('SCIAME IN ARRIVO!', 'SWARM INCOMING!', '¡LLEGA UN ENJAMBRE!', 'ESSAIM EN APPROCHE !', '虫群来袭！')
+      : isWeak ? L5('IL BOSS SI INDEBOLISCE!', 'THE BOSS IS WEAKENING!', '¡EL JEFE SE DEBILITA!', 'LE BOSS FAIBLIT !', '头目正在衰弱！')
+      : L5('MINI BOSS', 'MINI BOSS', 'MINI JEFE', 'MINI BOSS', '小头目');
+    const sub = isSwarm ? L5('Tantissimi nemici deboli', 'Tons of weak enemies', 'Muchísimos enemigos débiles', "Plein d'ennemis faibles", '大量弱小敌人')
+      : isWeak ? L5('Perde vita a ogni secondo', 'It loses health every second', 'Pierde vida cada segundo', 'Il perd de la vie chaque seconde', '每秒都在失去生命')
+      : (MINI[ev.text] || '');
     const a2 = Math.min(1, ev.t * 1.5, (3 - ev.t) * 4);
     ctx.save(); ctx.globalAlpha = Math.max(0, a2); ctx.textAlign = 'center';
     const cy = height * 0.28;
