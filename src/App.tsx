@@ -261,7 +261,7 @@ export default function App() {
     playgama.initialize().then(() => {
       if (playgama.isInitialized()) {
         // Pausa e audio richiesti dalla piattaforma (obbligatorio per la moderazione Playgama)
-        playgama.onPauseChanged((isPaused) => { platformPausedRef.current = isPaused; setAudioPaused(isPaused || pausedRef.current); });
+        playgama.onPauseChanged((isPaused) => { platformPausedRef.current = isPaused; setAudioPaused(isPaused || pausedRef.current || document.hidden); });
         playgama.onAudioChanged((enabled) => {
           const s = storeRef.current.settings;
           if (enabled) { setSfxVolume(s.sfxVolume); setMusicVolume(s.musicVolume); }
@@ -536,8 +536,50 @@ export default function App() {
     canvasSizeRef.current = { w, h, dpr };
   }, []);
 
+  // La partita avanza? Con il pilota automatico la pausa chiesta dalla piattaforma (es. scheda in secondo piano)
+  // non ferma il gioco: il pilota continua a giocare anche mentre si guarda altro. Le pubblicita' invece lo fermano.
+  const isGameActive = (state: any): boolean => {
+    const auto = !!storeRef.current.settings.autoPlay;
+    const platformStop = platformPausedRef.current && (!auto || performance.now() <= adGuardUntilRef.current);
+    return !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformStop && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
+  };
+
+  // Finestre di gioco (scrigno, level up, rinascita, fine partita): usato sia dal ciclo con il disegno
+  // sia dall'aggiornamento di riserva a scheda nascosta.
+  const syncGameUi = (state: any): void => {
+    if (state.chestPending && !chestShownRef.current) {
+      chestShownRef.current = true;
+      setChestRewards([...state.chestPending]);
+    }
+
+    if (state.levelUpPending && !levelUpShownRef.current) {
+      levelUpShownRef.current = true;
+      setLevelUpChoices([...state.levelUpChoices]);
+      setRerollsLeft(state.rerolls || 0);
+      setLevelUpPending(true);
+    }
+    if (state.revivePending && !reviveShownRef.current) {
+      reviveShownRef.current = true;
+      if (playgama.isRewardedSupported()) setRevivePending(true);
+      else { state.revivePending = false; state.gameOver = true; } // niente pubblicita': la partita finisce
+    }
+    if (state.gameOver && !gameOverShownRef.current) {
+      gameOverShownRef.current = true;
+      setRevivePending(false);
+      setFinalStats({
+        score: state.kills * 10 + Math.floor(state.time) * 5, time: state.time, kills: state.kills,
+        level: state.player.level, wave: state.wave, coins: state.coinsEarned, diamonds: state.diamondsEarned,
+        points: state.player.points, victory: !!state.victory,
+      });
+      finalizeRun();
+      setGameOver(true);
+    }
+  };
+
+  const lastRafAtRef = useRef(0);
   const gameLoop = useCallback((timestamp: number) => {
     if (!runningRef.current) return;
+    lastRafAtRef.current = performance.now();
     try {
       const engine = gameEngineRef.current;
       const state = gameStateRef.current;
@@ -552,7 +594,7 @@ export default function App() {
         lastTimeRef.current = timestamp;
 
         state.speedMultiplier = settings.speedMultiplier || 1;
-        const active = !pausedRef.current && !tutorialOpenRef.current && countdownRef.current <= 0 && !platformPausedRef.current && !state.gameOver && !state.levelUpPending && !state.revivePending && !state.chestPending;
+        const active = isGameActive(state);
         // Pilota automatico: guida lui finche' il giocatore non tocca i comandi
         if (active && settings.autoPlay && !joystickRef.current.active) state.touchDir = state.keys.size ? null : autopilotDir(state, dt);
         if (active) { engine.updateGame(state, dt); trackFrame(state); }
@@ -566,33 +608,7 @@ export default function App() {
         state.lowFx = lowFxRef.current;
         trackPerfFrame(rawMs, active);
 
-        if (state.chestPending && !chestShownRef.current) {
-          chestShownRef.current = true;
-          setChestRewards([...state.chestPending]);
-        }
-
-        if (state.levelUpPending && !levelUpShownRef.current) {
-          levelUpShownRef.current = true;
-          setLevelUpChoices([...state.levelUpChoices]);
-          setRerollsLeft(state.rerolls || 0);
-          setLevelUpPending(true);
-        }
-        if (state.revivePending && !reviveShownRef.current) {
-          reviveShownRef.current = true;
-          if (playgama.isRewardedSupported()) setRevivePending(true);
-          else { state.revivePending = false; state.gameOver = true; } // niente pubblicita': la partita finisce
-        }
-        if (state.gameOver && !gameOverShownRef.current) {
-          gameOverShownRef.current = true;
-          setRevivePending(false);
-          setFinalStats({
-            score: state.kills * 10 + Math.floor(state.time) * 5, time: state.time, kills: state.kills,
-            level: state.player.level, wave: state.wave, coins: state.coinsEarned, diamonds: state.diamondsEarned,
-            points: state.player.points, victory: !!state.victory,
-          });
-          finalizeRun();
-          setGameOver(true);
-        }
+        syncGameUi(state);
 
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         engine.renderGame(ctx, state, w, h, settings.language, settings.showDamageNumbers);
@@ -624,6 +640,32 @@ export default function App() {
     } catch (error: any) { console.error('Game loop error:', error); }
     animFrameRef.current = requestAnimationFrame(gameLoop);
   }, [finalizeRun, resizeCanvas]);
+
+  // Pilota automatico a scheda nascosta: il browser ferma requestAnimationFrame, quindi senza questo la
+  // partita si bloccherebbe. Qui il gioco avanza senza disegnare, recuperando il tempo trascorso a passi
+  // di 1/60 s (i browser rallentano i timer delle schede nascoste fino a uno al secondo).
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      // solo se il ciclo normale e' davvero fermo (nessun frame disegnato nell'ultimo mezzo secondo)
+      if (!document.hidden || !runningRef.current || performance.now() - lastRafAtRef.current < 500) return;
+      const engine = gameEngineRef.current, state = gameStateRef.current;
+      if (!engine || !state) return;
+      const now = performance.now();
+      const settings = storeRef.current.settings;
+      if (!settings.autoPlay) { lastTimeRef.current = now; return; }
+      let pending = Math.min(10, Math.max(0, (now - lastTimeRef.current) / 1000)); // al massimo 10 s per volta
+      lastTimeRef.current = now;
+      state.speedMultiplier = settings.speedMultiplier || 1;
+      const STEP = 1 / 60;
+      while (pending > 0 && isGameActive(state)) {
+        const dt = Math.min(STEP, pending); pending -= dt;
+        state.touchDir = autopilotDir(state, dt);
+        engine.updateGame(state, dt);
+      }
+      syncGameUi(state);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [finalizeRun]);
 
   const stopGameLoop = useCallback(() => {
     runningRef.current = false;
@@ -914,10 +956,13 @@ export default function App() {
       joystickRef.current = { ...joystickRef.current, active: false, id: null };
     };
     const handleVisibility = () => {
+      // l'audio si ferma sempre quando la pagina e' nascosta (anche se il pilota automatico continua a giocare)
+      setAudioPaused(document.hidden || pausedRef.current || platformPausedRef.current);
       if (document.hidden) {
         clearInput();
         const state = gameStateRef.current;
-        if (state && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current && countdownRef.current <= 0 && performance.now() > adGuardUntilRef.current) setPausedState(true);
+        // con il pilota automatico la partita continua anche mentre si guarda altro
+        if (state && !storeRef.current.settings.autoPlay && !state.gameOver && !state.levelUpPending && !state.revivePending && !pausedRef.current && countdownRef.current <= 0 && performance.now() > adGuardUntilRef.current) setPausedState(true);
       }
     };
 
