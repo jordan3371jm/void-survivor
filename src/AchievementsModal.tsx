@@ -1,9 +1,19 @@
 import { storageSetItem } from './game/storage';
 import React, { useState, useEffect } from 'react';
+import { Check, Coins, Crown, Eye, Gamepad2, Gem, Gift, Lock, Skull, Star, Target, Trophy, Waves, Zap } from 'lucide-react';
 import { GameStore } from './game/store';
 import { t, Language } from './game/i18n';
 import { achievements, AchievementStats, CompletedAchievement, getDifficultyColor, getDifficultyName } from './game/achievements';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
+
+/** Icone degli obiettivi: le emoji dei dati (achievements.ts) diventano icone disegnate. */
+const ACHIEVEMENT_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
+  '💀': Skull, '⭐': Star, '👹': Crown, '🎮': Gamepad2, '🏆': Trophy, '⚡': Zap, '🌊': Waves,
+};
+function AchievementIcon({ icon }: { icon: string }) {
+  const Icon = ACHIEVEMENT_ICONS[icon] || Trophy;
+  return <Icon size={28} />;
+}
 
 interface AchievementsModalProps {
   store: GameStore;
@@ -100,14 +110,12 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
   useEffect(() => {
     if (!store.userProfile) return;
     
-    console.log('[Achievements Modal] 🔍 Controllo obiettivi retroattivo...');
-    
+        
     const profile = { ...store.userProfile };
     const updatedProfile = checkAndCompleteAchievements(profile as any, store.settings.speedBoostTimer) as any;
     
     if (JSON.stringify(profile) !== JSON.stringify(updatedProfile)) {
-      console.log('[Achievements Modal] ✅ Nuovi obiettivi completati!');
-      const newStore = { ...store, userProfile: updatedProfile };
+            const newStore = { ...store, userProfile: updatedProfile };
       setStore(newStore);
       storageSetItem('voidSurvivorsStore', JSON.stringify(newStore));
     }
@@ -135,7 +143,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
       <div className="vs-legacy-modal max-w-4xl" style={{ ['--accent' as any]: '#fb923c' }}>
         {/* Header */}
         <div className="flex justify-between items-center mb-4 sm:mb-6">
-          <h2 className="text-xl sm:text-3xl font-bold text-white">🏆 {t(lang, 'achievements')}</h2>
+          <h2 className="text-xl sm:text-3xl font-bold text-white flex items-center gap-2"><Trophy size={26} /> {t(lang, 'achievements')}</h2>
           <button onClick={onClose} className="text-white text-2xl sm:text-3xl w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center hover:scale-110 transition-transform">×</button>
         </div>
 
@@ -197,7 +205,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
                 : 'bg-black/40 text-gray-300 hover:bg-black/60'
             }`}
           >
-            {showCompletedOnly ? '✓' : '👁️'}
+            {showCompletedOnly ? <Check size={18} /> : <Eye size={18} />}
           </button>
         </div>
 
@@ -226,19 +234,20 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
                   {completed ? (
                     claimed ? (
                       <div className="px-2 py-1 rounded-lg bg-green-600/20 border-2 border-green-500/50 text-green-400 font-bold text-xs">
-                        ✓
+                        <Check size={14} />
                       </div>
                     ) : (
                       <button
                         onClick={() => claimReward(achievement.id)}
                         className="px-2 py-1 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-xs transition-all hover:scale-105"
+                        aria-label={t(lang, 'achievement_claim')}
                       >
-                        🎁
+                        <Gift size={14} />
                       </button>
                     )
                   ) : (
                     <div className="px-2 py-1 rounded-lg bg-gray-600/20 border-2 border-gray-500/50 text-gray-400 font-bold text-xs">
-                      🔒{Math.floor(progress * 100)}%
+                      <Lock size={12} className="inline" />{Math.floor(progress * 100)}%
                     </div>
                   )}
                 </div>
@@ -254,7 +263,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
                         border: `2px solid ${getDifficultyColor(achievement.difficulty)}`
                       }}
                     >
-                      {achievement.icon}
+                      <AchievementIcon icon={achievement.icon} />
                     </div>
                     <span 
                       className="px-2 py-0.5 rounded text-xs font-bold sm:text-sm"
@@ -280,10 +289,10 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
                     {/* Ricompense */}
                     <div className="flex items-center gap-3 sm:gap-4 text-xs sm:text-sm mb-2">
                       <span className="text-yellow-400 font-bold">
-                        💰 {achievement.rewardCoins}
+                        <Coins size={14} className="inline" /> {achievement.rewardCoins}
                       </span>
                       <span className="text-cyan-400 font-bold">
-                        💎 {achievement.rewardDiamonds}
+                        <Gem size={14} className="inline" /> {achievement.rewardDiamonds}
                       </span>
                     </div>
 
@@ -312,19 +321,19 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
                     {completed ? (
                       claimed ? (
                         <div className="px-4 py-2 rounded-lg bg-green-600/20 border-2 border-green-500/50 text-green-400 font-bold text-sm">
-                          ✓ {t(lang, 'achievement_claimed')}
+                          <Check size={14} className="inline" /> {t(lang, 'achievement_claimed')}
                         </div>
                       ) : (
                         <button
                           onClick={() => claimReward(achievement.id)}
                           className="px-4 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-white font-bold text-sm transition-all hover:scale-105"
                         >
-                          🎁 {t(lang, 'achievement_claim')}
+                          <Gift size={14} className="inline" /> {t(lang, 'achievement_claim')}
                         </button>
                       )
                     ) : (
                       <div className="px-4 py-2 rounded-lg bg-gray-600/20 border-2 border-gray-500/50 text-gray-400 font-bold text-sm">
-                        🔒 {Math.floor(progress * 100)}%
+                        <Lock size={12} className="inline" /> {Math.floor(progress * 100)}%
                       </div>
                     )}
                   </div>
@@ -336,7 +345,7 @@ export const AchievementsModal: React.FC<AchievementsModalProps> = ({ store, set
 
         {filteredAchievements.length === 0 && (
           <div className="text-center py-8 sm:py-12 text-gray-400">
-            <div className="text-5xl sm:text-6xl mb-3 sm:mb-4">🎯</div>
+            <div className="mb-3 sm:mb-4 flex justify-center"><Target size={56} /></div>
             <p className="text-sm sm:text-lg">{({ it: 'Nessun obiettivo trovato', en: 'No achievements found', es: 'No se encontraron logros', fr: 'Aucun succès trouvé', zh: '未找到成就' } as Record<string, string>)[lang]}</p>
           </div>
         )}

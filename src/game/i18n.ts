@@ -585,9 +585,14 @@ for (const l of Object.keys(shipNames) as Language[]) {
   translations[l] = { ...translations[l], ...shipNames[l], ...weaponTexts[l] };
 }
 
+/** Toglie le emoji decorative all'inizio e alla fine dei testi: al loro posto l'interfaccia usa icone vere. */
+export function stripEmoji(text: string): string {
+  return text.replace(/^[\p{Extended_Pictographic}\uFE0F\u2600-\u27BF\s]+/u, '').replace(/[\s\p{Extended_Pictographic}\uFE0F\u2600-\u27BF]+$/u, '').trim();
+}
+
 export function t(lang: Language, key: string): string {
-  const app = appText(key, lang); if (app) return app;
-  return translations[lang]?.[key] || translations.en[key] || key;
+  const app = appText(key, lang); if (app) return stripEmoji(app);
+  return stripEmoji(translations[lang]?.[key] || translations.en[key] || key);
 }
 
 export const languageNames: Record<Language, string> = {

@@ -55,6 +55,10 @@ export interface Player extends Entity {
 
 export interface Enemy extends Entity {
   type: EnemyType;
+  /** secondi di scontro con questo boss (per la fatica dopo 75 s) */
+  fightTime?: number;
+  /** la scritta "il boss si indebolisce" e' gia' stata mostrata */
+  fatigueAnnounced?: boolean;
   /** Boss Rush: soglia di vita sotto la quale il boss perde il prossimo cristallo di esperienza */
   expDropHp?: number;
   /** mini boss: usa le mosse con preavviso dei boss, ma non ferma le ondate */

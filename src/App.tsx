@@ -12,10 +12,15 @@ import { playgama } from './game/playgame';
 import { trackRunStart, trackFrame, trackRunEnd, trackTutorial, trackPerfFrame } from './game/telemetry';
 import { getLoginRewardsState, hasUnclaimedReward } from './game/loginRewards';
 import { AbilityIcon } from './components/abilityIcon';
+import { Avatar, DEFAULT_AVATAR } from './components/avatar';
 import { ShipIcon } from './components/shipIcon';
 import { checkAndCompleteAchievements } from './game/achievementChecker';
 import { recordRunForDailyChallenges, countClaimable } from './game/dailyChallenges';
 import { autopilotDir, autopilotChoice } from './game/autopilot';
+import { SHIPS, PACKS, grantPack, AD_REWARDS, DIAMOND_EXCHANGE, ACTIVE_ABILITIES, PASSIVE_ABILITIES } from './ui/catalog';
+import type { Pack } from './ui/catalog';
+import { L, packTitle, clean, isWeakDevice, formatTime, Currency, TopBar, Toggle } from './ui/common';
+import { SettingsScreen } from './ui/SettingsScreen';
 import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag, Bot } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
@@ -39,135 +44,6 @@ interface FinalStats {
 // Dalla nave piu' debole alla piu' forte (in base all'arma di partenza), prezzo crescente.
 // La nave Buco Nero e' stata tolta (store.ts rimborsa chi l'aveva comprata).
 // iap: astronavi in vendita con soldi veri (Playgama payments). Dove i pagamenti non ci sono restano acquistabili con le monete.
-const SHIPS: { type: string; nameKey: string; price: number; color: string; ability: string; iap?: string }[] = [
-  { type: 'starter', nameKey: 'ship_starter', price: 0, color: '#62f5cf', ability: 'homing_laser' },
-  { type: 'shield_ship', nameKey: 'ship_shield', price: 150, color: '#3dffaa', ability: 'energy_shield' },
-  { type: 'cryo_ship', nameKey: 'ship_cryo', price: 250, color: '#4ff0ff', ability: 'cryo_lance' },
-  { type: 'mechanical_ship', nameKey: 'ship_mechanical', price: 350, color: '#c9d2e3', ability: 'orbiting_satellites' },
-  { type: 'bio_ship', nameKey: 'ship_bio', price: 450, color: '#ff5f8f', ability: 'corrosive_nebula' },
-  { type: 'photon_ship', nameKey: 'ship_photon', price: 600, color: '#ff5555', ability: 'photon_gun' },
-  { type: 'ion_ship', nameKey: 'ship_ion', price: 750, color: '#6b7bff', ability: 'ion_gun' },
-  { type: 'drone_ship', nameKey: 'ship_drone', price: 900, color: '#ffb02e', ability: 'drone_swarm' },
-  { type: 'gravity_ship', nameKey: 'ship_gravity', price: 1100, color: '#c05bff', ability: 'gravity_waves' },
-  { type: 'probe_x_ship', nameKey: 'ship_probe_x', price: 1300, color: '#ff4444', ability: 'probe_x' },
-  { type: 'probe_y_ship', nameKey: 'ship_probe_y', price: 1500, color: '#4f6bff', ability: 'probe_y' },
-  { type: 'asteroid_ship', nameKey: 'ship_asteroid', price: 1750, color: '#d19a66', ability: 'asteroid_fragment' },
-  { type: 'quantum_ship', nameKey: 'ship_quantum', price: 2000, color: '#5cffff', ability: 'quantum_bounce', iap: 'ship_quantum' },
-  { type: 'boomerang_ship', nameKey: 'ship_boomerang', price: 2300, color: '#aab4ff', ability: 'neutronium_boomerang', iap: 'ship_boomerang' },
-  { type: 'kinetic_ship', nameKey: 'ship_kinetic', price: 2600, color: '#ff9a2e', ability: 'kinetic_darts', iap: 'ship_kinetic' },
-  { type: 'electric_ship', nameKey: 'ship_electric', price: 3000, color: '#7cc4ff', ability: 'ion_storm' },
-  { type: 'meteor_ship', nameKey: 'ship_meteor', price: 3400, color: '#ff7a33', ability: 'meteor' },
-  { type: 'fire_ship', nameKey: 'ship_fire', price: 3900, color: '#ff6a2b', ability: 'plasma_flamethrower' },
-  { type: 'viper_ship', nameKey: 'ship_viper', price: 4400, color: '#c0c8d8', ability: 'prism_ray', iap: 'ship_viper' },
-  { type: 'tie_fighter_ship', nameKey: 'ship_tie_fighter', price: 5000, color: '#a3acc2', ability: 'arc_slash', iap: 'ship_tie_fighter' },
-  { type: 'nuclear_ship', nameKey: 'ship_nuclear', price: 5700, color: '#5cff8a', ability: 'antimatter_bomb' },
-  { type: 'shadow_ship', nameKey: 'ship_shadow', price: 6500, color: '#9f8cff', ability: 'gravity_field' },
-  { type: 'federation_ship', nameKey: 'ship_federation', price: 7400, color: '#e6ecf5', ability: 'void_lance', iap: 'ship_federation' },
-  { type: 'laser_ship', nameKey: 'ship_laser', price: 8500, color: '#ff4d5e', ability: 'laser_swords', iap: 'ship_laser' },
-  { type: 'void_ship', nameKey: 'ship_void', price: 10000, color: '#e35bff', ability: 'stellar_blackhole', iap: 'ship_void' },
-];
-
-// Cambio diamanti -> monete nel negozio (piu' diamanti, cambio piu' conveniente)
-// Pacchetti a pagamento del negozio (Playgama payments). consumable: si possono ricomprare.
-type Pack = { id: string; coins: number; diamonds: number; consumable: boolean; ship?: string; speed?: boolean };
-const PACKS: Pack[] = [
-  { id: 'coins_small', coins: 50000, diamonds: 0, consumable: true },
-  { id: 'coins_medium', coins: 300000, diamonds: 0, consumable: true },
-  { id: 'coins_large', coins: 1500000, diamonds: 0, consumable: true },
-  { id: 'coins_huge', coins: 5000000, diamonds: 0, consumable: true },
-  { id: 'diamonds_small', coins: 0, diamonds: 50, consumable: true },
-  { id: 'diamonds_medium', coins: 0, diamonds: 250, consumable: true },
-  { id: 'diamonds_large', coins: 0, diamonds: 600, consumable: true },
-  { id: 'diamonds_huge', coins: 0, diamonds: 1500, consumable: true },
-  { id: 'starter_pack', coins: 100000, diamonds: 100, consumable: false, ship: 'void_ship' },
-  { id: 'mega_pack', coins: 1000000, diamonds: 1000, consumable: true },
-  { id: 'speed_x2', coins: 0, diamonds: 0, consumable: false, speed: true },
-];
-/** Consegna il contenuto di un pacchetto. I pacchetti permanenti si consegnano una sola volta. */
-function grantPack(cur: GameStore, pack: Pack): GameStore {
-  const granted = cur.iapGranted || [];
-  if (!pack.consumable && granted.includes(pack.id)) {
-    // gia' consegnato: ripristina solo cio' che e' permanente (nave, x2)
-    return { ...cur, ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships, speedX2Owned: cur.speedX2Owned || !!pack.speed };
-  }
-  return {
-    ...cur,
-    coins: cur.coins + pack.coins, diamonds: cur.diamonds + pack.diamonds,
-    ships: pack.ship ? { ...cur.ships, [pack.ship]: true } : cur.ships,
-    speedX2Owned: cur.speedX2Owned || !!pack.speed,
-    iapGranted: pack.consumable ? granted : [...granted, pack.id],
-  };
-}
-
-// Premi del negozio guardando una pubblicita' con premio (senza limite)
-const AD_REWARDS = [{ id: 'shop_coins', coins: 500, diamonds: 0 }, { id: 'shop_diamonds', coins: 0, diamonds: 5 }];
-// 300 monete per diamante nel cambio piu' piccolo, fino a 500 nel piu' grande (1000 diamanti = 500.000 monete)
-const DIAMOND_EXCHANGE = [{ diamonds: 10, coins: 3000 }, { diamonds: 50, coins: 17500 }, { diamonds: 100, coins: 40000 }, { diamonds: 250, coins: 105000 }, { diamonds: 500, coins: 225000 }, { diamonds: 1000, coins: 500000 }];
-
-const ACTIVE_ABILITIES: AbilityType[] = ['photon_gun', 'ion_gun', 'drone_swarm', 'gravity_waves', 'void_lance', 'cryo_lance', 'energy_shield', 'asteroid_fragment', 'homing_laser', 'laser_swords', 'plasma_flamethrower', 'gravity_field', 'ion_storm', 'antimatter_bomb', 'orbiting_satellites', 'corrosive_nebula', 'kinetic_darts', 'meteor', 'neutronium_boomerang', 'quantum_bounce', 'stellar_blackhole', 'probe_x', 'probe_y', 'prism_ray', 'arc_slash'];
-const PASSIVE_ABILITIES: AbilityType[] = ['passive_fusion_core', 'passive_plating', 'passive_neutronium_heart', 'passive_regen_core', 'passive_void_tome', 'passive_stellar_candelabrum', 'passive_kinetic_accelerator', 'passive_quantum_binder', 'passive_molecular_replicator', 'passive_ionic_thrusters', 'passive_gravity_field', 'passive_stellar_fortune', 'passive_galactic_crown', 'passive_cosmic_dust', 'passive_quantum_reactor', 'passive_pulsar_heart', 'passive_galactic_coin'];
-
-/** Testi brevi non presenti nel file delle traduzioni. */
-function L(lang: Language, it: string, en: string, es: string, fr: string, zh: string): string {
-  return lang === 'it' ? it : lang === 'es' ? es : lang === 'fr' ? fr : lang === 'zh' ? zh : lang === 'pl' ? plFromEn(en) : en;
-}
-
-function packTitle(lang: Language, id: string): string {
-  const T: Record<string, [string, string, string, string, string]> = {
-    coins_small: ['Monete piccolo', 'Small coins', 'Monedas pequeño', 'Petit lot de pièces', '小金币包'],
-    coins_medium: ['Monete medio', 'Medium coins', 'Monedas mediano', 'Lot moyen de pièces', '中金币包'],
-    coins_large: ['Monete grande', 'Large coins', 'Monedas grande', 'Grand lot de pièces', '大金币包'],
-    coins_huge: ['Monete gigante', 'Huge coins', 'Monedas gigante', 'Lot géant de pièces', '巨型金币包'],
-    diamonds_small: ['Diamanti piccolo', 'Small diamonds', 'Diamantes pequeño', 'Petit lot de diamants', '小钻石包'],
-    diamonds_medium: ['Diamanti medio', 'Medium diamonds', 'Diamantes mediano', 'Lot moyen de diamants', '中钻石包'],
-    diamonds_large: ['Diamanti grande', 'Large diamonds', 'Diamantes grande', 'Grand lot de diamants', '大钻石包'],
-    diamonds_huge: ['Diamanti enorme', 'Huge diamonds', 'Diamantes enorme', 'Lot énorme de diamants', '巨型钻石包'],
-    starter_pack: ['Pacchetto iniziale', 'Starter pack', 'Paquete inicial', 'Pack de départ', '新手礼包'],
-    mega_pack: ['Mega pacchetto', 'Mega pack', 'Mega paquete', 'Méga pack', '超级礼包'],
-    speed_x2: ['Velocità x2 per sempre', 'Permanent x2 speed', 'Velocidad x2 para siempre', 'Vitesse x2 pour toujours', '永久x2速度'],
-  };
-  const v = T[id]; return v ? L(lang, ...v) : id;
-}
-
-/** Rimuove emoji iniziali/finali dalle traduzioni (al loro posto usiamo icone coerenti). */
-function clean(text: string): string {
-  return text.replace(/^[\p{Extended_Pictographic}️☀-➿\s]+/u, '').replace(/[\s\p{Extended_Pictographic}️☀-➿]+$/u, '').trim();
-}
-
-function formatTime(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
-}
-
-function Currency({ store, compact }: { store: GameStore; compact?: boolean }) {
-  return (
-    <div className={`vs-currency${compact ? ' is-compact' : ''}`}>
-      <span className="vs-chip vs-chip--coin"><Coins size={15} aria-hidden="true" />{Math.round(store.coins)}</span>
-      <span className="vs-chip vs-chip--gem"><Gem size={15} aria-hidden="true" />{Math.round(store.diamonds)}</span>
-      {store.points > 0 && <span className="vs-chip vs-chip--star"><Star size={15} aria-hidden="true" />{Math.round(store.points)}</span>}
-    </div>
-  );
-}
-
-function TopBar({ title, icon, onBack, lang, right }: { title: string; icon?: React.ReactNode; onBack: () => void; lang: Language; right?: React.ReactNode }) {
-  return (
-    <header className="vs-topbar">
-      <button type="button" className="vs-btn vs-btn--ghost vs-btn--sm vs-back" onClick={onBack}>
-        <ArrowLeft size={18} aria-hidden="true" /><span>{t(lang, 'back')}</span>
-      </button>
-      <h1 className="vs-topbar-title">{icon}{title}</h1>
-      <div className="vs-topbar-right">{right}</div>
-    </header>
-  );
-}
-
-function Toggle({ on, onChange, label }: { on: boolean; onChange: () => void; label: string }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} className={`vs-toggle${on ? ' is-on' : ''}`} onClick={onChange}>
-      <span className="vs-toggle-knob" />
-    </button>
-  );
-}
-
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const gameStateRef = useRef<GameState>(null as unknown as GameState);
@@ -315,7 +191,7 @@ export default function App() {
             const userId = user.uid || user.id;
             const userEmail = user.email || '';
             const userName = user.displayName || user.user_metadata?.username || user.user_metadata?.full_name || 'Player';
-            const userAvatar = user.photoURL || user.user_metadata?.avatar_url || '👤';
+            const userAvatar = user.photoURL || user.user_metadata?.avatar_url || DEFAULT_AVATAR;
             const userData = await auth.loadUserData(userId);
 
             if (userData) {
@@ -474,7 +350,7 @@ export default function App() {
       diamonds: storeRef.current.diamonds + state.diamondsEarned,
       points: storeRef.current.points + state.player.points,
     };
-    if (!ns.userProfile) ns = { ...ns, userProfile: createUserProfile('local@player.com', 'Giocatore Locale', '🎮') };
+    if (!ns.userProfile) ns = { ...ns, userProfile: createUserProfile('local@player.com', 'Giocatore Locale', DEFAULT_AVATAR) };
     ns = addHighScore(ns, score, state.kills, state.time, state.player.level);
 
     const p = ns.userProfile!;
@@ -517,9 +393,10 @@ export default function App() {
       .catch((err: any) => console.error('[App] Errore salvataggio punteggio globale:', err));
   }, [commitStore]);
 
-  // Modalita' leggera automatica: se durante la partita gli fps restano sotto 42 per 6 secondi,
-  // niente bagliori, meno particelle e risoluzione piu' bassa (per il resto della sessione)
-  const lowFxRef = useRef(false);
+  // Modalita' leggera automatica: se durante la partita gli fps restano sotto 42 per 4 secondi,
+  // niente bagliori, meno particelle e risoluzione piu' bassa (per il resto della sessione).
+  // Sui telefoni poco potenti (pochi core o poca memoria) parte gia' attiva: i bagliori (shadowBlur) li rallentano molto.
+  const lowFxRef = useRef(isWeakDevice());
   const perfRef = useRef({ acc: 0, n: 0, slow: 0 });
 
   const resizeCanvas = useCallback(() => {
@@ -600,7 +477,7 @@ export default function App() {
         if (active) { engine.updateGame(state, dt); trackFrame(state); }
         if (active && !lowFxRef.current && rawMs > 0 && rawMs < 250) {
           const pf = perfRef.current; pf.acc += rawMs; pf.n++;
-          if (pf.acc >= 3000) {
+          if (pf.acc >= 2000) {
             pf.slow = pf.n * 1000 / pf.acc < 42 ? pf.slow + 1 : 0; pf.acc = 0; pf.n = 0;
             if (pf.slow >= 2) { lowFxRef.current = true; resizeCanvas(); }
           }
@@ -1155,7 +1032,7 @@ export default function App() {
       <div className="vs-screen vs-screen--home">
         <header className="vs-home-top">
           <button type="button" className="vs-profile-pill" onClick={() => setShowProfileModal(true)}>
-            <span className="vs-profile-avatar">{store.userProfile?.avatar && !store.userProfile.avatar.startsWith('http') && !store.userProfile.avatar.startsWith('data:') ? store.userProfile.avatar : <UserRound size={18} />}</span>
+            <Avatar value={store.userProfile?.avatar} size={28} className="vs-profile-avatar" />
             <span className="vs-profile-name">{store.userProfile?.name && store.userProfile.name !== 'Giocatore Locale' ? store.userProfile.name : L(lang, 'Pilota', 'Pilot', 'Piloto', 'Pilote', '飞行员')}</span>
           </button>
           <div className="vs-home-top-right">
@@ -1580,96 +1457,16 @@ export default function App() {
   // ---------------------------------------------------------------------------
   if (screen === 'settings') {
     return (
-      <div className="vs-screen">
-        <TopBar title={t(lang, 'settings')} icon={<Settings2 size={22} />} onBack={() => goTo('home')} lang={lang} />
-        <main className="vs-content">
-          <div className="vs-settings">
-            <section className="vs-panel vs-settings-wide">
-              <h2 className="vs-panel-title"><Sparkles size={18} />{t(lang, 'language')}</h2>
-              <div className="vs-lang-grid">
-                {(Object.keys(languageNames) as Language[]).map(l => (
-                  <button key={l} type="button" className={`vs-lang${store.settings.language === l ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}>
-                    {languageNames[l]}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="vs-panel vs-settings-wide">
-              <h2 className="vs-panel-title"><SunMoon size={18} />{t(lang, 'theme')}</h2>
-              <div className="vs-lang-grid">
-                {(['auto', 'light', 'dark'] as const).map(th => (
-                  <button key={th} type="button" className={`vs-lang${(store.settings.theme || 'dark') === th ? ' is-active' : ''}`} onClick={() => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}>
-                    {t(lang, `theme_${th}`)}
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <h2 className="vs-panel-title"><Volume2 size={18} />{t(lang, 'sfxVolume')}</h2>
-                <span className="vs-value">{Math.round(store.settings.sfxVolume * 100)}%</span>
-              </div>
-              <input className="vs-range" type="range" min="0" max="1" step="0.05" value={store.settings.sfxVolume} style={{ ['--fill' as any]: `${store.settings.sfxVolume * 100}%` }} onChange={(e) => { const v = parseFloat(e.target.value); updateSetting('sfxVolume', v); setSfxVolume(v); }} />
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <h2 className="vs-panel-title"><Music2 size={18} />{t(lang, 'musicVolume')}</h2>
-                <span className="vs-value">{Math.round(store.settings.musicVolume * 100)}%</span>
-              </div>
-              <input className="vs-range" type="range" min="0" max="1" step="0.05" value={store.settings.musicVolume} style={{ ['--fill' as any]: `${store.settings.musicVolume * 100}%` }} onChange={(e) => { const v = parseFloat(e.target.value); updateSetting('musicVolume', v); setMusicVolume(v); }} />
-            </section>
-
-            <section className="vs-panel">
-              <h2 className="vs-panel-title"><Music2 size={18} />{t(lang, 'custom_music')}</h2>
-              <p className={customMusicLoaded ? 'vs-ok' : 'vs-muted'}>{customMusicLoaded ? (customMusicName || '✓') : t(lang, 'no_custom_music')}</p>
-              <label className="vs-btn vs-btn--ghost vs-btn--block">
-                <FolderOpen size={17} />{customMusicLoaded ? t(lang, 'change_music') : t(lang, 'load_audio_file')}
-                <input type="file" accept="audio/*" onChange={handleMusicFileUpload} hidden />
-              </label>
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <h2 className="vs-panel-title"><Crosshair size={18} />{t(lang, 'show_damage_numbers')}</h2>
-                <Toggle on={store.settings.showDamageNumbers} label={t(lang, 'show_damage_numbers')} onChange={() => updateSetting('showDamageNumbers', !store.settings.showDamageNumbers)} />
-              </div>
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <div>
-                  <h2 className="vs-panel-title"><Joystick size={18} />{t(lang, 'virtual_joystick')}</h2>
-                  <p className="vs-muted vs-small">{t(lang, 'virtual_joystick_desc')}</p>
-                </div>
-                <Toggle on={store.settings.useJoystick} label={t(lang, 'virtual_joystick')} onChange={() => updateSetting('useJoystick', !store.settings.useJoystick)} />
-              </div>
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <div>
-                  <h2 className="vs-panel-title"><Bot size={18} />{L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')}</h2>
-                  <p className="vs-muted vs-small">{L(lang, 'La nave si muove da sola, schiva i pericoli, raccoglie esperienza e oggetti e sceglie i potenziamenti. Puoi sempre riprendere i comandi', 'Your ship moves on its own, dodges danger, collects XP and items and picks upgrades. You can take control at any time', 'La nave se mueve sola, esquiva peligros, recoge experiencia y objetos y elige mejoras. Puedes retomar el control cuando quieras', 'Le vaisseau se déplace seul, esquive les dangers, ramasse l’expérience et les objets et choisit les améliorations. Tu peux reprendre la main à tout moment', '飞船会自动移动、躲避危险、收集经验和道具并选择升级。你可以随时接管控制')}</p>
-                </div>
-                <Toggle on={autoPlay} label={L(lang, 'Gioco automatico', 'Auto play', 'Juego automático', 'Jeu automatique', '自动游戏')} onChange={toggleAutoPlay} />
-              </div>
-            </section>
-
-            <section className="vs-panel">
-              <div className="vs-row">
-                <div>
-                  <h2 className="vs-panel-title"><Sparkles size={18} />{L(lang, 'Tutorial', 'Tutorial', 'Tutorial', 'Tutoriel', '教程')}</h2>
-                  <p className="vs-muted vs-small">{store.settings.tutorialDone ? L(lang, 'Rivedi come si gioca nella prossima partita', 'Show how to play again in your next run', 'Vuelve a ver cómo se juega en la próxima partida', 'Revois comment jouer à la prochaine partie', '在下一局重新查看玩法') : L(lang, 'Verrà mostrato all’inizio della prossima partita', 'It will be shown at the start of your next run', 'Se mostrará al inicio de la próxima partida', 'Il sera affiché au début de la prochaine partie', '将在下一局开始时显示')}</p>
-                </div>
-                <Toggle on={!store.settings.tutorialDone} label="Tutorial" onChange={() => updateSetting('tutorialDone', !store.settings.tutorialDone)} />
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
+      <SettingsScreen
+        store={store} lang={lang} autoPlay={autoPlay}
+        customMusicLoaded={customMusicLoaded} customMusicName={customMusicName}
+        onBack={() => goTo('home')}
+        onLanguage={(l) => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, language: l, languageChosen: true } }); }}
+        onTheme={(th) => { const c = storeRef.current; commitStore({ ...c, settings: { ...c.settings, theme: th } }); }}
+        updateSetting={updateSetting}
+        onMusicFile={handleMusicFileUpload}
+        onToggleAutoPlay={toggleAutoPlay}
+      />
     );
   }
 

@@ -454,16 +454,17 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     mini_warden: { radius: 40, hp: 1100, speed: 45, expValue: 80, color: '#d08cff', pattern: 'boss' },
     mini_reaper: { radius: 40, hp: 2000, speed: 65, expValue: 100, color: '#ff5577', pattern: 'boss' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 2300 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
-    boss_cthulhu: { radius: 90, hp: 6000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
-    boss_borg_cube: { radius: 85, hp: 15000 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
-    boss_space_kraken: { radius: 95, hp: 20000 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
-    boss_galaxy_devourer: { radius: 100, hp: 30000 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
-    boss_void_emperor: { radius: 88, hp: 40000 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
-    boss_cosmic_horror: { radius: 92, hp: 50000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
+    boss_xenomorph: { radius: 70, hp: 1900 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_cthulhu: { radius: 90, hp: 3200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
+    boss_borg_cube: { radius: 85, hp: 4800 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
+    boss_space_kraken: { radius: 95, hp: 6300 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
+    boss_galaxy_devourer: { radius: 100, hp: 7800 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
+    boss_void_emperor: { radius: 88, hp: 9500 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
+    boss_cosmic_horror: { radius: 92, hp: 12000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
   };
   const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
-  // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute)
+  // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute).
+  // Vita di base piu' dolce da un boss all'altro (prima 1.000 -> 50.000: dal terzo boss gli scontri duravano minuti)
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
   // Boss Rush: stessa vita della modalita' normale (senza la crescita col tempo), un po' piu' bassa
@@ -776,6 +777,10 @@ function processAbilities(state: GameState, dt: number): void {
   }
 }
 
+/** Dopo quanti secondi di scontro il boss comincia a indebolirsi, e quanta vita perde al secondo (frazione). */
+const BOSS_FATIGUE_AFTER = 75;
+const BOSS_FATIGUE_RATE = 0.004;
+
 /** Ordine dei boss (Boss Rush, normale ed endless) */
 const BOSS_ORDER: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
 
@@ -929,6 +934,15 @@ function updateEnemies(state: GameState, gameDt: number): void {
       case 'swarm': enemy.vel.x = toPlayer.x * enemy.speed + (Math.random() - 0.5) * 50; enemy.vel.y = toPlayer.y * enemy.speed + (Math.random() - 0.5) * 50; break;
       case 'boss': {
         enemy.phaseTimer = (enemy.phaseTimer || 0) + gameDt;
+        // Fatica: dopo 75 s di scontro il boss perde da solo lo 0,4% della vita al secondo,
+        // cosi' nessuno scontro dura all'infinito (prima un boss poteva richiedere 10 minuti)
+        if (enemy.isBoss) {
+          enemy.fightTime = (enemy.fightTime || 0) + gameDt;
+          if (enemy.fightTime > BOSS_FATIGUE_AFTER) {
+            if (!enemy.fatigueAnnounced) { enemy.fatigueAnnounced = true; state.eventBanner = { text: 'boss_weak', t: 3 }; }
+            enemy.hp -= enemy.maxHp * BOSS_FATIGUE_RATE * gameDt;
+          }
+        }
         updateBoss(state, enemy, gameDt, toPlayer);
         // Boss Rush: senza nemici normali non si guadagnava esperienza (si restava a livello 1 con una sola arma).
         // Ora il boss perde cristalli di esperienza ogni 5% di salute persa.
@@ -1102,7 +1116,6 @@ export function updateGame(state: GameState, dt: number): void {
           state.gameOver = true;
           state.victory = true;
           state.score += 10000; // Bonus vittoria
-          console.log('[Game] 🏆 Vittoria! Hai completato la modalità normale!');
         }
         
         // Assorbi tutta l'EXP presente sul campo quando muore un boss
@@ -1878,7 +1891,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       const name = state.currentBossType ? (lang === 'pl' ? plFromEn(getBossNameEN(state.currentBossType)) : lang === 'it' ? getBossNameIT(state.currentBossType) : lang === 'es' ? getBossNameES(state.currentBossType) : lang === 'fr' ? getBossNameFR(state.currentBossType) : lang === 'zh' ? getBossNameZH(state.currentBossType) : getBossNameEN(state.currentBossType)) : 'BOSS';
       ctx.textAlign = 'center'; ctx.font = `800 ${11 * s}px ${HUD_FONT}`;
       ctx.fillStyle = Math.sin(state.time * 5) > 0 ? '#ff5577' : '#ffb4c2';
-      ctx.fillText(`⚠ ${name} ⚠`, width / 2, bY - 9 * s);
+      ctx.fillText(`! ${name} !`, width / 2, bY - 9 * s);
       hudRoundRect(ctx, bX - 3, bY - 3, bw + 6, bh + 6, (bh + 6) / 2);
       ctx.fillStyle = 'rgba(8, 10, 26, 0.75)'; ctx.fill();
       ctx.strokeStyle = 'rgba(255, 45, 85, 0.5)'; ctx.lineWidth = 1; ctx.stroke();
@@ -1948,8 +1961,13 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
       mini_warden: L5('GUARDIANO', 'WARDEN', 'GUARDIÁN', 'GARDIEN', '守望者'), mini_reaper: L5('MIETITORE', 'REAPER', 'SEGADOR', 'FAUCHEUR', '收割者'),
     };
     const isSwarm = ev.text === 'swarm';
-    const title = isSwarm ? L5('SCIAME IN ARRIVO!', 'SWARM INCOMING!', '¡LLEGA UN ENJAMBRE!', 'ESSAIM EN APPROCHE !', '虫群来袭！') : L5('MINI BOSS', 'MINI BOSS', 'MINI JEFE', 'MINI BOSS', '小头目');
-    const sub = isSwarm ? L5('Tantissimi nemici deboli', 'Tons of weak enemies', 'Muchísimos enemigos débiles', "Plein d'ennemis faibles", '大量弱小敌人') : (MINI[ev.text] || '');
+    const isWeak = ev.text === 'boss_weak';
+    const title = isSwarm ? L5('SCIAME IN ARRIVO!', 'SWARM INCOMING!', '¡LLEGA UN ENJAMBRE!', 'ESSAIM EN APPROCHE !', '虫群来袭！')
+      : isWeak ? L5('IL BOSS SI INDEBOLISCE!', 'THE BOSS IS WEAKENING!', '¡EL JEFE SE DEBILITA!', 'LE BOSS FAIBLIT !', '头目正在衰弱！')
+      : L5('MINI BOSS', 'MINI BOSS', 'MINI JEFE', 'MINI BOSS', '小头目');
+    const sub = isSwarm ? L5('Tantissimi nemici deboli', 'Tons of weak enemies', 'Muchísimos enemigos débiles', "Plein d'ennemis faibles", '大量弱小敌人')
+      : isWeak ? L5('Perde vita a ogni secondo', 'It loses health every second', 'Pierde vida cada segundo', 'Il perd de la vie chaque seconde', '每秒都在失去生命')
+      : (MINI[ev.text] || '');
     const a2 = Math.min(1, ev.t * 1.5, (3 - ev.t) * 4);
     ctx.save(); ctx.globalAlpha = Math.max(0, a2); ctx.textAlign = 'center';
     const cy = height * 0.28;
@@ -1975,7 +1993,7 @@ function renderUI(ctx: CanvasRenderingContext2D, state: GameState, width: number
     else if (state.currentBossType === 'boss_borg_cube') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX, bgY + bgHeight); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.3, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(0.7, 'rgba(0, 30, 0, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#00ff00'; ctx.lineWidth = 1; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 3; ctx.globalAlpha = alpha * 0.3; for (let i = 0; i < 20; i++) { const x = bgX + (i / 20) * bgWidth; ctx.beginPath(); ctx.moveTo(x, bgY); ctx.lineTo(x, bgY + bgHeight); ctx.stroke(); } for (let i = 0; i < 8; i++) { const y = bgY + (i / 8) * bgHeight; ctx.beginPath(); ctx.moveTo(bgX, y); ctx.lineTo(bgX + bgWidth, y); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#00ff00'; ctx.font = 'bold 38px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#00ff00'; ctx.shadowBlur = 20; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.7; ctx.fillStyle = '#88ff88'; ctx.font = '14px monospace'; ctx.fillText('ALL WILL BE ONE', centerX, centerY + 35); }
     else if (state.currentBossType === 'boss_space_kraken') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(60, 0, 80, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(30, 0, 60, 0.6)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#aa44ff'; ctx.lineWidth = 3; ctx.shadowColor = '#aa44ff'; ctx.shadowBlur = 10; ctx.globalAlpha = alpha * 0.5; for (let i = 0; i < 6; i++) { ctx.beginPath(); const startX = bgX + (i / 6) * bgWidth; ctx.moveTo(startX, bgY + bgHeight); for (let j = 0; j < 5; j++) { const cx = startX + Math.sin(state.time * 2 + i + j) * 30; const cy = bgY + bgHeight - (j / 5) * bgHeight; ctx.lineTo(cx, cy); } ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ff44ff'; ctx.font = 'bold 44px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 25; ctx.fillText(bossName, centerX, centerY); }
     else if (state.currentBossType === 'boss_galaxy_devourer') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(40, 0, 60, 0.9)'); bgGrad.addColorStop(0.3, 'rgba(20, 0, 40, 0.7)'); bgGrad.addColorStop(0.7, 'rgba(10, 0, 20, 0.5)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#8844ff'; ctx.lineWidth = 2; ctx.shadowColor = '#8844ff'; ctx.shadowBlur = 8; ctx.globalAlpha = alpha * 0.4; for (let s = 0; s < 2; s++) { ctx.beginPath(); for (let i = 0; i < 50; i++) { const a = (i / 50) * Math.PI * 4 + s * Math.PI + state.time * 0.3; const r = (i / 50) * bgWidth * 0.4; const px = centerX + Math.cos(a) * r; const py = centerY + Math.sin(a) * r * 0.4; if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); } ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#cc88ff'; ctx.font = 'bold 40px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#aa44ff'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.shadowBlur = 50; ctx.globalAlpha = alpha * 0.3; ctx.fillText(bossName, centerX, centerY); }
-    else if (state.currentBossType === 'boss_void_emperor') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX + bgWidth, bgY); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.2, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(80, 0, 100, 0.9)'); bgGrad.addColorStop(0.8, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 15; ctx.globalAlpha = alpha * 0.6; for (let i = 0; i < 7; i++) { const px = bgX + 60 + (i / 6) * (bgWidth - 120); ctx.beginPath(); ctx.moveTo(px, bgY + 20); ctx.lineTo(px + 10, bgY + 5); ctx.lineTo(px + 20, bgY + 20); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ff88ff'; ctx.font = 'bold 46px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = '#cc44ff'; ctx.font = 'bold 14px serif'; ctx.fillText('⚜ RULER OF THE VOID ⚜', centerX, centerY + 35); }
+    else if (state.currentBossType === 'boss_void_emperor') { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX + bgWidth, bgY); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.2, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(0.5, 'rgba(80, 0, 100, 0.9)'); bgGrad.addColorStop(0.8, 'rgba(40, 0, 60, 0.8)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 2; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 15; ctx.globalAlpha = alpha * 0.6; for (let i = 0; i < 7; i++) { const px = bgX + 60 + (i / 6) * (bgWidth - 120); ctx.beginPath(); ctx.moveTo(px, bgY + 20); ctx.lineTo(px + 10, bgY + 5); ctx.lineTo(px + 20, bgY + 20); ctx.stroke(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ff88ff'; ctx.font = 'bold 46px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.6; ctx.fillStyle = '#cc44ff'; ctx.font = 'bold 14px serif'; ctx.fillText('RULER OF THE VOID', centerX, centerY + 35); }
     else if (state.currentBossType === 'boss_cosmic_horror') { const bgGrad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, bgWidth / 2); bgGrad.addColorStop(0, 'rgba(0, 20, 40, 0.9)'); bgGrad.addColorStop(0.5, 'rgba(0, 10, 30, 0.7)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.globalAlpha = alpha * 0.5; for (let i = 0; i < 10; i++) { const ex = bgX + 40 + Math.random() * (bgWidth - 80); const ey = bgY + 20 + Math.random() * (bgHeight - 40); const er = 4 + Math.random() * 8; ctx.fillStyle = '#ffff00'; ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(ex, ey, er, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#000000'; ctx.beginPath(); ctx.arc(ex, ey, er * 0.4, 0, Math.PI * 2); ctx.fill(); } ctx.globalAlpha = alpha; ctx.fillStyle = '#ffff44'; ctx.font = 'bold italic 42px serif'; ctx.textAlign = 'center'; ctx.shadowColor = '#ffff00'; ctx.shadowBlur = 35; ctx.fillText(bossName, centerX, centerY); ctx.globalAlpha = alpha * 0.3; ctx.fillStyle = '#ff8800'; ctx.fillText(bossName, centerX + 3, centerY - 2); }
     else { const bgGrad = ctx.createLinearGradient(bgX, bgY, bgX, bgY + bgHeight); bgGrad.addColorStop(0, 'rgba(0, 0, 0, 0)'); bgGrad.addColorStop(0.3, 'rgba(255, 0, 68, 0.3)'); bgGrad.addColorStop(0.5, 'rgba(255, 0, 68, 0.5)'); bgGrad.addColorStop(0.7, 'rgba(255, 0, 68, 0.3)'); bgGrad.addColorStop(1, 'rgba(0, 0, 0, 0)'); ctx.fillStyle = bgGrad; ctx.fillRect(bgX, bgY, bgWidth, bgHeight); ctx.fillStyle = '#ff0044'; ctx.font = 'bold 48px monospace'; ctx.textAlign = 'center'; ctx.shadowColor = '#ff0044'; ctx.shadowBlur = 30; ctx.fillText(bossName, centerX, centerY); }
     const bossIcon = getBossIcon(state.currentBossType);
