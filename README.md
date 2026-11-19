@@ -17,6 +17,13 @@ La build usa percorsi relativi: il contenuto di `dist/` si può caricare così c
 (Playgama, hosting statico, sottocartelle). `dist/` non è più nel repository: generala con
 `npm run build` prima di pubblicare.
 
+## itch.io
+
+`npm run build:itch` crea la cartella `dist-itch/` e il file `void-survivors-itch.zip` (con `index.html`
+alla radice), da caricare su itch.io come gioco HTML. Questa versione non carica Playgama, non ha
+pubblicità né acquisti e salva i progressi nel browser; la velocità x2 si sblocca sconfiggendo gli 8 boss.
+I crediti e le licenze dei materiali di terzi sono in `itch/` e finiscono nello zip.
+
 Il gioco usa ovunque (web, Playgama, app) nomi senza marchi registrati e la musica libera CC0
 (`public/audio/bgm-free.mp3`). Gli effetti sonori (`public/audio/sfx/`) vengono dai pacchetti
 "Sci-Fi Sounds" e "Digital SFX" di [Kenney](https://www.kenney.nl), licenza CC0. Account e salvataggi online passano solo da Playgama Bridge;

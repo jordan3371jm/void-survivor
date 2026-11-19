@@ -2,6 +2,7 @@
 // Documentazione: https://wiki.playgama.com/playgama/bridge-sdk
 
 import { Capacitor } from '@capacitor/core';
+import { isItch } from './target';
 import { trackPurchase } from './telemetry';
 
 /** true quando il gioco gira come app Android/iOS (Capacitor), false sul web */
@@ -21,8 +22,9 @@ class PlaygamaSDK {
 
   private async doInitialize(): Promise<void> {
     if (this.initialized) return;
+    if (isItch) return; // itch.io: nessuna piattaforma, nessuna pubblicita'
     // Nell'app non c'e' Playgama: le pubblicita' passano da AdMob
-    if (isNativeApp()) { import('./nativeAds').then(m => m.initNativeAds()).catch(e => console.warn('[AdMob]', e)); return; }
+    if (!isItch && isNativeApp()) { import('./nativeAds').then(m => m.initNativeAds()).catch(e => console.warn('[AdMob]', e)); return; }
 
     let attempts = 0;
     const maxAttempts = 100; // 5 secondi al massimo
@@ -102,7 +104,7 @@ class PlaygamaSDK {
   }
 
   async showInterstitial(placement: string = 'game_over'): Promise<void> {
-    if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeInterstitial(); }
+    if (!isItch && isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeInterstitial(); }
     if (!this.isInitialized() || !this.bridge.advertisement) return;
 
     try {
@@ -114,7 +116,7 @@ class PlaygamaSDK {
   }
 
   async showRewarded(placement: string = 'extra_life'): Promise<boolean> {
-    if (isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeRewarded(); }
+    if (!isItch && isNativeApp()) { const m = await import('./nativeAds'); return m.showNativeRewarded(); }
     if (!this.isInitialized() || !this.bridge.advertisement) return false;
 
     return new Promise((resolve) => {
@@ -170,12 +172,12 @@ class PlaygamaSDK {
   }
 
   isInterstitialSupported(): boolean {
-    if (isNativeApp()) return true;
+    if (!isItch && isNativeApp()) return true;
     return this.isInitialized() && !!this.bridge.advertisement?.isInterstitialSupported;
   }
 
   isRewardedSupported(): boolean {
-    if (isNativeApp()) return true;
+    if (!isItch && isNativeApp()) return true;
     return this.isInitialized() && !!this.bridge.advertisement?.isRewardedSupported;
   }
 
