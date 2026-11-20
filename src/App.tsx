@@ -21,6 +21,7 @@ import { SHIPS, PACKS, grantPack, AD_REWARDS, DIAMOND_EXCHANGE, ACTIVE_ABILITIES
 import type { Pack } from './ui/catalog';
 import { L, packTitle, clean, isWeakDevice, formatTime, Currency, TopBar, Toggle } from './ui/common';
 import { SettingsScreen } from './ui/SettingsScreen';
+import { isItch } from './game/target';
 import { ArrowLeft, CalendarDays, Shuffle, Heart, Clapperboard, Coins, Crosshair, Gem, Gift, Home, Infinity as InfinityIcon, Joystick, Lock, Music2, Pause, Play, RotateCcw, Rocket, Settings2, Shield, Skull, Sparkles, Star, Swords, Target, Timer, Trophy, UserRound, Volume2, X, Zap, FolderOpen, Check, SunMoon, ShoppingBag, Bot } from 'lucide-react';
 
 const ProfileModal = React.lazy(() => import('./profile').then((module) => ({ default: module.ProfileModal })));
@@ -560,16 +561,7 @@ export default function App() {
       const newState = engine.createInitialState(s.currentShip as any, mode);
       // Potenziamenti del negozio: non valgono nella Boss Rush (senza nemici normali la renderebbero troppo facile)
       if (mode !== 'boss_rush') {
-        newState.player.maxHp = s.stats.maxHp || 100;
-        newState.player.hp = s.stats.maxHp || 100;
-        newState.player.damage = s.stats.attack || 10;
-        newState.player.speed = s.stats.shipSpeed || 200;
-        newState.player.armor = s.stats.defense || 0;
-        newState.player.regenPerSecond = s.stats.regeneration || 0;
-        newState.player.luckBonus = (s.stats.luck || 0) / 100;
-        newState.player.expBonus = (s.stats.expBonus || 0) / 100;
-        newState.player.critChance = s.stats.critChance || 0;
-        newState.player.critDamage = s.stats.critDamage || 150;
+        engine.applyShopStats(newState, s.stats);
         newState.player.abilityAttackBonuses = { ...s.abilityAttackLevels };
       } else {
         // Boss Rush: niente potenziamenti, ma si parte con 300 di vita
@@ -1106,7 +1098,10 @@ export default function App() {
             { value: 1, label: clean(t(lang, 'speed_normal')), unlocked: true, note: '' },
             // x1.5: sconfiggendo il 4o boss. x2: con una pubblicita' (10 minuti) o comprato per sempre nel negozio
             { value: 1.5, label: clean(t(lang, 'speed_fast')), unlocked: bosses >= 4, note: L(lang, 'Sconfiggi il quarto boss per sbloccare x1.5', 'Defeat the fourth boss to unlock x1.5', 'Derrota al cuarto jefe para desbloquear x1.5', 'Bats le quatrième boss pour débloquer x1.5', '击败第四个Boss解锁x1.5') },
-            { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: !!store.speedX2Owned || store.settings.speedBoostTimer > 0, note: t(lang, 'speed_requirement_ads') },
+            // itch.io: niente pubblicita' ne' acquisti, quindi x2 si sblocca sconfiggendo tutti gli 8 boss
+            isItch
+              ? { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: bosses >= 8, note: L(lang, 'Sconfiggi tutti gli 8 boss per sbloccare x2', 'Defeat all 8 bosses to unlock x2', 'Derrota a los 8 jefes para desbloquear x2', 'Bats les 8 boss pour débloquer x2', '击败全部8个头目解锁x2') }
+              : { value: 2, label: clean(t(lang, 'speed_ultra')), unlocked: !!store.speedX2Owned || store.settings.speedBoostTimer > 0, note: t(lang, 'speed_requirement_ads') },
           ];
           return (
             <div className="vs-modal-backdrop" onClick={() => setShowSpeedModal(false)}>
@@ -1140,11 +1135,11 @@ export default function App() {
                     >
                       <span className="vs-option-main">{o.unlocked ? (store.settings.speedMultiplier === o.value ? <Check size={18} /> : <Zap size={18} />) : <Lock size={18} />}{o.label}</span>
                       {!o.unlocked && <span className="vs-option-note">{o.note}</span>}
-                      {o.unlocked && o.value === 2 && <span className="vs-option-note">{store.speedX2Owned ? clean(t(lang, 'speed_permanent_unlock')) : formatTime(store.settings.speedBoostTimer)}</span>}
+                      {o.unlocked && o.value === 2 && !isItch && <span className="vs-option-note">{store.speedX2Owned ? clean(t(lang, 'speed_permanent_unlock')) : formatTime(store.settings.speedBoostTimer)}</span>}
                     </button>
                   ))}
                 </div>
-                {!store.speedX2Owned && (
+                {!store.speedX2Owned && !isItch && (
                   <div className="vs-panel vs-panel--inset vs-center">
                     <span>{t(lang, 'speed_requirement_ads')}</span>
                     <button type="button" className="vs-btn vs-btn--gold" onClick={watchSpeedAd}>

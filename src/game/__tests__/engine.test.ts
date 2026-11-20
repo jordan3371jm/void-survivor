@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createInitialState, updateGame, spawnEnemy, applyLevelUpChoice } from '../engine';
+import { createInitialState, updateGame, spawnEnemy, applyLevelUpChoice, applyShopStats } from '../engine';
 import type { GameState, Projectile } from '../types';
 
 const DT = 1 / 60;
@@ -90,5 +90,21 @@ describe('level up', () => {
     run(s, 60, undefined);
     const total = s.player.abilities.reduce((n, a) => n + a.level, 0);
     expect(total).toBeGreaterThanOrEqual(s.player.level);
+  });
+});
+
+describe('potenziamenti del negozio', () => {
+  it('rendono piu\' forte la nave e non i nemici', () => {
+    const base = createInitialState('starter', 'normal');
+    const e0 = spawnEnemy(base, 'star_raider');
+    const s = createInitialState('starter', 'normal');
+    applyShopStats(s, { maxHp: 385, shipSpeed: 388, critChance: 15.6, critDamage: 305, regeneration: 1 });
+    const e1 = spawnEnemy(s, 'star_raider');
+    expect(s.player.maxHp).toBe(385);
+    expect(s.player.speed).toBe(388);
+    expect(s.player.critChance).toBe(15.6);
+    expect(e1.damage).toBeCloseTo(e0.damage);
+    expect(e1.speed).toBeCloseTo(e0.speed);
+    expect(e1.maxHp).toBeCloseTo(e0.maxHp);
   });
 });

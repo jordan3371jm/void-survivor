@@ -7,6 +7,7 @@ import { getAbilityInfo } from './game/abilityInfo';
 import { AbilityIcon } from './components/abilityIcon';
 import { Avatar, AVATAR_SHIPS, DEFAULT_AVATAR } from './components/avatar';
 import { ShipIcon } from './components/shipIcon';
+import { isItch } from './game/target';
 import { authorizePlatformPlayer, fetchGlobalLeaderboard, getLeaderboardKind, getPlatformPlayer, GlobalEntry, showNativeLeaderboard } from './game/bridge';
 
 const L = (lang: Language, it: string, en: string, es: string, fr: string, zh: string) => (lang === 'pl' ? plFromEn(en) : ({ it, en, es, fr, zh } as Record<string, string>)[lang] ?? en);
@@ -152,7 +153,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ store, lang,
             : entries.length === 0 ? <p className="vs-muted vs-center">{failed ? L(lang, 'Classifica non raggiungibile, riprova più tardi.', 'Leaderboard unreachable, try again later.', 'Clasificación no disponible, inténtalo más tarde.', 'Classement indisponible, réessaie plus tard.', '排行榜暂不可用，请稍后再试。') : L(lang, 'Nessun punteggio ancora: sii il primo!', 'No scores yet: be the first!', 'Aún no hay puntuaciones: ¡sé el primero!', 'Pas encore de scores : sois le premier !', '暂无分数：成为第一名！')}</p>
             : (
               <>
-              {<p className="vs-muted vs-small vs-center">{L(lang, 'I nomi degli altri piloti sono assegnati da Playgama.', 'Other pilots’ names are assigned by Playgama.', 'Los nombres de los demás pilotos los asigna Playgama.', 'Les noms des autres pilotes sont attribués par Playgama.', '其他飞行员的名字由Playgama分配。')}</p>}
+              {!isItch && <p className="vs-muted vs-small vs-center">{L(lang, 'I nomi degli altri piloti sono assegnati da Playgama.', 'Other pilots’ names are assigned by Playgama.', 'Los nombres de los demás pilotos los asigna Playgama.', 'Les noms des autres pilotes sont attribués par Playgama.', '其他飞行员的名字由Playgama分配。')}</p>}
               <ol className="vs-rank-list">
                 {entries.slice(0, 50).map(e => (
                   <li key={e.id + e.rank} className={`vs-rank-row ${medal(e.rank)}${me.id && e.id === me.id ? ' is-me' : ''}`}>

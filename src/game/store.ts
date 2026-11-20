@@ -1,5 +1,6 @@
 import { storageGetItem, storageSetItem } from './storage';
 import type { Language } from './i18n';
+import { isItch } from './target';
 
 export interface PlayerStats {
   maxHp: number;
@@ -185,7 +186,7 @@ export function loadStore(): GameStore {
       }
       if (parsed.currentShip === 'blackhole_ship') parsed.currentShip = 'starter';
       // il x2 permanente ora si compra: chi lo aveva sbloccato coi boss torna a x1.5 (o x1)
-      if (parsed.settings?.speedMultiplier === 2 && !(parsed.settings.speedBoostTimer > 0) && !parsed.speedX2Owned) parsed.settings = { ...parsed.settings, speedMultiplier: (parsed.userProfile?.totalBossesDefeated || 0) >= 4 ? 1.5 : 1 };
+      if (parsed.settings?.speedMultiplier === 2 && !(parsed.settings.speedBoostTimer > 0) && !parsed.speedX2Owned && !(isItch && (parsed.userProfile?.totalBossesDefeated || 0) >= 8)) parsed.settings = { ...parsed.settings, speedMultiplier: (parsed.userProfile?.totalBossesDefeated || 0) >= 4 ? 1.5 : 1 };
       // la salute ora arriva al livello 500 (prima 200)
       if (parsed.upgrades?.maxHp && (parsed.upgrades.maxHp.maxLevel || 0) < 500) parsed.upgrades = { ...parsed.upgrades, maxHp: { ...parsed.upgrades.maxHp, maxLevel: 500 } };
       return { ...DEFAULT_STORE, ...parsed, stats: { ...DEFAULT_STORE.stats, ...(parsed.stats || {}) }, settings: { ...DEFAULT_STORE.settings, ...(parsed.settings || {}) }, ships: { ...DEFAULT_STORE.ships, ...(parsed.ships || {}) }, upgrades: { ...DEFAULT_STORE.upgrades, ...(parsed.upgrades || {}) } };
