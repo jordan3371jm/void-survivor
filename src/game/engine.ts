@@ -302,10 +302,8 @@ const PASSIVES_TO_10 = new Set<string>(['passive_fusion_core', 'passive_neutroni
 export interface ShopStats { maxHp?: number; attack?: number; shipSpeed?: number; defense?: number; regeneration?: number; luck?: number; expBonus?: number; critChance?: number; critDamage?: number; }
 
 /**
- * Applica i potenziamenti del negozio alla nave e adatta la difficolta': con piu' vita i nemici colpiscono
- * un po' piu' forte, con piu' velocita' i nemici normali sono un po' piu' veloci, con piu' critico hanno un po'
- * piu' vita (vita x4 -> danno nemico x1,6; vita x6 -> x1,8).
- * Senza potenziamenti tutto resta a 1.
+ * Applica i potenziamenti del negozio alla nave. Valgono pienamente: la partita base e' dura
+ * (senza potenziamenti ci si ferma intorno al 3o-4o boss) e sono i potenziamenti a portare avanti.
  */
 export function applyShopStats(state: GameState, st: ShopStats): void {
   const p = state.player;
@@ -318,15 +316,6 @@ export function applyShopStats(state: GameState, st: ShopStats): void {
   p.expBonus = (st.expBonus || 0) / 100;
   p.critChance = st.critChance || 0;
   p.critDamage = st.critDamage || 150;
-  const hpGain = Math.max(1, p.maxHp / 100) * (1 + p.regenPerSecond * 0.12) * (1 + p.armor * 0.04);
-  const critGain = 1 + (Math.min(100, p.critChance) / 100) * Math.max(0, p.critDamage / 100 - 1);
-  // crescita logaritmica: compensa i primi potenziamenti e sempre meno i successivi,
-  // cosi' comprare di piu' rende sempre la nave piu' forte
-  state.shopScale = {
-    damage: 1 + 0.45 * Math.log(hpGain),
-    speed: 1 + 0.3 * Math.log(Math.max(1, p.speed / 200)),
-    hp: 1 + 0.3 * Math.log(critGain),
-  };
 }
 
 export function abilityMaxLevel(type: AbilityType): number {
@@ -485,17 +474,17 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
     mini_warden: { radius: 40, hp: 1100, speed: 45, expValue: 80, color: '#d08cff', pattern: 'boss' },
     mini_reaper: { radius: 40, hp: 2000, speed: 65, expValue: 100, color: '#ff5577', pattern: 'boss' },
     boss_death_star: { radius: 80, hp: 1000 * timeMultiplier, speed: 30, expValue: 150, color: '#aaaaaa', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.5 },
-    boss_xenomorph: { radius: 70, hp: 1900 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
-    boss_cthulhu: { radius: 90, hp: 3200 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
-    boss_borg_cube: { radius: 85, hp: 4800 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
-    boss_space_kraken: { radius: 95, hp: 6300 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
-    boss_galaxy_devourer: { radius: 100, hp: 7800 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
-    boss_void_emperor: { radius: 88, hp: 9500 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
-    boss_cosmic_horror: { radius: 92, hp: 12000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
+    boss_xenomorph: { radius: 70, hp: 2200 * timeMultiplier, speed: 62, expValue: 140, color: '#222222', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.2 },
+    boss_cthulhu: { radius: 90, hp: 5000 * timeMultiplier, speed: 35, expValue: 160, color: '#006644', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.8 },
+    boss_borg_cube: { radius: 85, hp: 8500 * timeMultiplier, speed: 25, expValue: 170, color: '#004400', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2 },
+    boss_space_kraken: { radius: 95, hp: 12000 * timeMultiplier, speed: 40, expValue: 165, color: '#440066', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.6 },
+    boss_galaxy_devourer: { radius: 100, hp: 16000 * timeMultiplier, speed: 20, expValue: 200, color: '#220044', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 2.2 },
+    boss_void_emperor: { radius: 88, hp: 21000 * timeMultiplier, speed: 45, expValue: 180, color: '#440088', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.4 },
+    boss_cosmic_horror: { radius: 92, hp: 27000 * timeMultiplier, speed: 38, expValue: 190, color: '#002244', pattern: 'boss', isBoss: true, bossPhase: 0, phaseTimer: 0, shootTimer: 0, shootInterval: 1.7 }
   };
   const base = { ...(baseEnemies[type] || baseEnemies['asteroid_small']) };
   // I boss crescono piu' lentamente dei nemici normali (prima a 20 minuti avevano 11 volte la salute).
-  // Vita di base piu' dolce da un boss all'altro (prima 1.000 -> 50.000: dal terzo boss gli scontri duravano minuti)
+  // Vita di base: 1.000 -> 27.000. Dal terzo boss servono i potenziamenti del negozio (critico) per non andare per le lunghe
   if (type.startsWith('boss_')) { const endlessMul = timeMultiplier / (1 + waveIdx * 0.22 + waveIdx * waveIdx * 0.004); base.hp = (base.hp / timeMultiplier) * (1 + waveIdx * 0.12) * endlessMul; }
   // Boss Rush: la vita cresce sempre, boss dopo boss, fino all'ultimo (1400 -> ~9000)
   // Boss Rush: stessa vita della modalita' normale (senza la crescita col tempo), un po' piu' bassa
@@ -511,15 +500,12 @@ export function spawnEnemy(state: GameState, type: EnemyType): Enemy {
   // I danni dei nemici crescono col tempo (prima restavano 10 per tutta la partita: con un po' di armatura si era invincibili)
   // Danni: bassi all'inizio (meta' di prima), +12% per ogni ondata
   let dmgMul = 0.5 * (1 + waveIdx * 0.12) * (state.gameMode === 'endless' && state.wave > 40 ? 1 + (state.wave - 40) * 0.05 : 1);
-  // Dal 4o boss sconfitto in poi i nemici normali hanno sempre piu' vita e danno (e arrivano piu' numerosi, vedi spawn)
+  // Dal 3o boss sconfitto in poi i nemici normali hanno sempre piu' vita e danno (e arrivano piu' numerosi, vedi spawn)
   const bossStep = postBossStep(state);
-  if (bossStep > 0 && !type.startsWith('boss_')) { base.hp *= 1 + bossStep * 0.3; dmgMul *= 1 + bossStep * 0.15; }
+  if (bossStep > 0 && !type.startsWith('boss_')) { base.hp *= 1 + bossStep * 0.3; dmgMul *= 1 + bossStep * 0.4; }
   // Endless: finito il giro degli 8 boss, quelli successivi tornano sempre piu' forti
   if (type.startsWith('boss_') && state.gameMode === 'endless') { const cycle = Math.floor(Math.max(0, (state.bossSpawnCount || 1) - 1) / 8); if (cycle > 0) { base.hp *= 1 + cycle * 0.8; dmgMul *= 1 + cycle * 0.3; } }
-  // Difficolta' adattata ai potenziamenti del negozio: i potenziamenti aiutano sempre, ma non rendono la partita banale
-  const shop = state.shopScale;
-  const shopHp = shop ? shop.hp : 1, shopDmg = shop ? shop.damage : 1, shopSpd = shop && !base.isBoss && !type.startsWith('mini_') ? shop.speed : 1;
-  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul * shopHp, maxHp: base.hp * curseMul * shopHp, damage: (type.startsWith('boss_') ? 36 : type.includes('asteroid') ? 15 : 10) * dmgMul * shopDmg, type, speed: base.speed * curseMul * shopSpd, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
+  return { id: genId(), pos, vel: { x: 0, y: 0 }, radius: base.radius, hp: base.hp * curseMul, maxHp: base.hp * curseMul, damage: (type.startsWith('boss_') ? 48 : type.includes('asteroid') ? 15 : 10) * dmgMul, type, speed: base.speed * curseMul, expValue: base.expValue, color: base.color, pattern: base.pattern, shootTimer: base.shootTimer, shootInterval: base.shootInterval, isBoss: base.isBoss, bossPhase: base.bossPhase, phaseTimer: base.phaseTimer };
 }
 
 // Modalita' leggera (dispositivi lenti, vedi App.tsx): meno particelle e niente bagliori
@@ -812,8 +798,8 @@ function processAbilities(state: GameState, dt: number): void {
 }
 
 /** Dopo quanti secondi di scontro il boss comincia a indebolirsi, e quanta vita perde al secondo (frazione). */
-const BOSS_FATIGUE_AFTER = 75;
-const BOSS_FATIGUE_RATE = 0.004;
+const BOSS_FATIGUE_AFTER = 100;
+const BOSS_FATIGUE_RATE = 0.003;
 
 /** Ordine dei boss (Boss Rush, normale ed endless) */
 const BOSS_ORDER: EnemyType[] = ['boss_death_star', 'boss_xenomorph', 'boss_cthulhu', 'boss_borg_cube', 'boss_space_kraken', 'boss_galaxy_devourer', 'boss_void_emperor', 'boss_cosmic_horror'];
@@ -968,7 +954,7 @@ function updateEnemies(state: GameState, gameDt: number): void {
       case 'swarm': enemy.vel.x = toPlayer.x * enemy.speed + (Math.random() - 0.5) * 50; enemy.vel.y = toPlayer.y * enemy.speed + (Math.random() - 0.5) * 50; break;
       case 'boss': {
         enemy.phaseTimer = (enemy.phaseTimer || 0) + gameDt;
-        // Fatica: dopo 75 s di scontro il boss perde da solo lo 0,4% della vita al secondo,
+        // Fatica: dopo 100 s di scontro il boss perde da solo lo 0,3% della vita al secondo,
         // cosi' nessuno scontro dura all'infinito (prima un boss poteva richiedere 10 minuti)
         if (enemy.isBoss) {
           enemy.fightTime = (enemy.fightTime || 0) + gameDt;
@@ -2168,7 +2154,7 @@ function drawSpecialPool(ctx: CanvasRenderingContext2D, pool: NebulaPool, state:
 
 /** Quanti boss sono stati sconfitti oltre il terzo: da li' in poi ogni boss rende le ondate piu' dure. */
 function postBossStep(state: GameState): number {
-  return state.gameMode === 'boss_rush' ? 0 : Math.max(0, (state.bossesDefeated || 0) - 3);
+  return state.gameMode === 'boss_rush' ? 0 : Math.max(0, (state.bossesDefeated || 0) - 2);
 }
 
 /** Quanti mostri normali possono ancora entrare in scena (il tetto sale un po' dopo il 4o boss). */

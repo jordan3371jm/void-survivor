@@ -93,25 +93,18 @@ describe('level up', () => {
   });
 });
 
-describe('difficolta\' adattata ai potenziamenti del negozio', () => {
-  it('senza potenziamenti i nemici restano quelli di sempre', () => {
+describe('potenziamenti del negozio', () => {
+  it('rendono piu\' forte la nave e non i nemici', () => {
     const base = createInitialState('starter', 'normal');
     const e0 = spawnEnemy(base, 'star_raider');
     const s = createInitialState('starter', 'normal');
-    applyShopStats(s, {});
+    applyShopStats(s, { maxHp: 385, shipSpeed: 388, critChance: 15.6, critDamage: 305, regeneration: 1 });
     const e1 = spawnEnemy(s, 'star_raider');
+    expect(s.player.maxHp).toBe(385);
+    expect(s.player.speed).toBe(388);
+    expect(s.player.critChance).toBe(15.6);
     expect(e1.damage).toBeCloseTo(e0.damage);
     expect(e1.speed).toBeCloseTo(e0.speed);
     expect(e1.maxHp).toBeCloseTo(e0.maxHp);
-  });
-
-  it('piu\' potenziamenti rendono i nemici piu\' forti, ma la nave cresce sempre di piu\'', () => {
-    const mid = createInitialState('starter', 'normal'); applyShopStats(mid, { maxHp: 385, shipSpeed: 388, critChance: 15.6, critDamage: 305, regeneration: 1 });
-    const top = createInitialState('starter', 'normal'); applyShopStats(top, { maxHp: 600, shipSpeed: 530, critChance: 27.4, critDamage: 424, regeneration: 1.8 });
-    expect(mid.shopScale!.damage).toBeGreaterThan(1);
-    expect(top.shopScale!.damage).toBeGreaterThan(mid.shopScale!.damage);
-    // la vita della nave cresce piu' del danno dei nemici: comprare conviene sempre
-    expect(top.player.maxHp / top.shopScale!.damage).toBeGreaterThan(mid.player.maxHp / mid.shopScale!.damage);
-    expect(mid.player.maxHp / mid.shopScale!.damage).toBeGreaterThan(100);
   });
 });

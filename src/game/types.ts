@@ -385,8 +385,6 @@ export interface GameState {
   currentWave: number;
   currentScore: number;
   currentKills: number;
-  /** difficolta' adattata ai potenziamenti del negozio (1 = nessun potenziamento), vedi applyShopStats */
-  shopScale?: { damage: number; speed: number; hp: number };
   /** modalita' leggera (meno effetti) attivata da App quando gli fps calano */
   lowFx?: boolean;
   /** ultima ondata per cui si e' deciso l'evento speciale */
